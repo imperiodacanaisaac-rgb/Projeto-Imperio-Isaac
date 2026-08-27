@@ -1,0 +1,118 @@
+{
+  "iteration": 1,
+  "app": "Imperio Da Cana (FastAPI + MongoDB + React 19 TS)",
+  "passed": 14,
+  "failed": 0,
+  "flaky": 0,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Login dos 3 perfis e menu/dashboard condicionais por role",
+      "name": "login-roles-menu-conditional",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "dev abre Painel do Desenvolvedor com nav-usuarios/configuracoes/logs visiveis; admin abre Painel do Administrador com nav-funcionarios/produtos/caixa/relatorios e SEM nav-configuracoes/logs/usuarios; atendente abre Painel do Atendente com apenas nav-dashboard/mesas/novo-pedido/pedidos/meu-perfil; senha errada mantem formulario-login visivel com mensagem de erro."
+    },
+    {
+      "criterion": "Criar mesa aparece na grade imediatamente e número duplicado é bloqueado",
+      "name": "mesa-criar-e-bloquear-duplicata",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Criada mesa numero aleatorio (500-900) via UI, card apareceu na grade sem reload; segunda tentativa com mesmo numero exibiu 'Já existe mesa com este número' e a grade continuou com exatamente 1 card daquele numero."
+    },
+    {
+      "criterion": "Criar mesa aparece na grade imediatamente e número duplicado é bloqueado (API)",
+      "name": "test_criar_mesa_e_bloquear_duplicata",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /mesas com numero aleatorio -> 201 status LIVRE; segunda POST com mesmo numero -> 400 'Já existe mesa com este número'."
+    },
+    {
+      "criterion": "Comandas sequenciais e vínculo com mesa deixando-a OCUPADA",
+      "name": "pedido-mesa-ocupada-e-comanda-sequencial",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Pedido 1 vinculado a mesa nova gerou COMANDA N; mesa exibiu badge 'Ocupada' em /mesas; pedido 2 (balcao) gerou comanda N+ (numericamente maior), confirmando sequencia crescente sem repeticao."
+    },
+    {
+      "criterion": "Comandas sequenciais e vínculo com mesa deixando-a OCUPADA (API)",
+      "name": "test_comandas_sequenciais_e_mesa_ocupada",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /pedidos #1 (com mesaId) -> 201 comanda X; POST /pedidos #2 (balcao) -> 201 comanda Y, int(Y) > int(X); GET /mesas mostrou mesa com status OCUPADA apos o pedido #1."
+    },
+    {
+      "criterion": "Total do carrinho em tempo real e botão desabilitado sem itens",
+      "name": "novo-pedido-carrinho-total-tempo-real",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Carrinho vazio -> botao-finalizar-pedido desabilitado; 2x Caldo 300ml + 1x Pastel de Carne -> total R$ 20,00; +/- e remover recalcularam corretamente (26,00 -> 20,00 -> 12,00)."
+    },
+    {
+      "criterion": "Confirmar pagamento calcula troco, libera a mesa e lança entrada no caixa",
+      "name": "pagamento-calcula-troco-libera-mesa-caixa",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Pedido de Caldo 500ml (R$9,00) pago em Dinheiro com R$20,00 recebido exibiu troco R$11,00 antes de confirmar; apos confirmar, status Pago, mesa voltou a Livre, e a comanda apareceu nas entradas do caixa logado como admin."
+    },
+    {
+      "criterion": "Confirmar pagamento calcula troco, libera a mesa, lança entrada no caixa e bloqueia pagamento duplo (API)",
+      "name": "test_pagamento_troco_libera_mesa_e_lanca_caixa",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /pedidos/{id}/pagamento forma DINHEIRO valorRecebido=total+5 -> 200 com pagamento.troco=5.00, status PAGO; GET /mesas mostrou mesa LIVRE; GET /caixa/movimentos continha a comanda; segunda chamada de pagamento -> 400 'Este pedido já foi pago por outro usuário'."
+    },
+    {
+      "criterion": "Cancelar pedido exige motivo e libera a mesa",
+      "name": "cancelar-pedido-exige-motivo-libera-mesa",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Modal de cancelamento com motivo vazio manteve botao-confirmar-cancelamento desabilitado; com motivo preenchido, pedido virou Cancelado exibindo o motivo no detalhe, e a mesa voltou a Livre."
+    },
+    {
+      "criterion": "Cancelar pedido exige motivo e libera a mesa (API)",
+      "name": "test_cancelar_exige_motivo_e_libera_mesa",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "PATCH /pedidos/{id}/cancelar com motivo vazio -> 422 (validacao Pydantic, min 3 chars); com motivo valido -> 200 status CANCELADO com canceladoMotivo gravado; GET /mesas confirmou mesa LIVRE."
+    },
+    {
+      "criterion": "Permissões: ADMIN não cria outro ADMIN e ATENDENTE não acessa áreas restritas",
+      "name": "permissoes-admin-atendente-404",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Como admin, o select de perfil no modal Novo Funcionario ofereceu apenas 'Atendente' (opcao-role-admin e opcao-role-dev ausentes). Como atendente, navegacao direta para /caixa, /produtos, /relatorios, /configuracoes e /logs mostrou a tela acesso-negado (nunca branca); /rota-que-nao-existe mostrou pagina-404."
+    },
+    {
+      "criterion": "Permissões: ADMIN não cria outro ADMIN e ATENDENTE não acessa endpoints restritos (API)",
+      "name": "test_admin_nao_cria_admin_e_atendente_sem_acesso",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /usuarios (admin, role=ADMIN) -> 403 'Administradores só podem criar usuários Atendente'; POST /usuarios (admin, role=ATENDENTE) -> 201; GET /usuarios (atendente) -> 403."
+    },
+    {
+      "criterion": "DEV altera máscara da comanda com preview e reflete no próximo pedido; tema persiste",
+      "name": "dev-mascara-comanda-preview-e-tema-persiste",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Digitar 'TSCHK-###' atualizou preview-proxima-comanda em tempo real; máscara sem '#' desabilitou botao-salvar-mascara; após salvar, novo pedido gerou comanda com prefixo TSCHK-; botao-alternar-tema mudou a classe do <html> e o valor persistiu após reload; máscara restaurada para '###' ao final (confirmado via GET /api/configuracoes)."
+    },
+    {
+      "criterion": "DEV altera máscara da comanda (validação e aplicação) (API)",
+      "name": "test_dev_altera_mascara_comanda_e_restaura",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "PUT /configuracoes/mascaraComanda valor='SEMHASH' -> 400 'deve conter ao menos um #'; valor='TSCHECK-###' -> 200; POST /pedidos subsequente gerou comanda iniciando com 'TSCHECK-'; máscara restaurada para '###' via PUT no final do teste."
+    }
+  ],
+  "bugs": [],
+  "action_items": [
+    "Observação operacional (não é bug de app): o rate-limit de login (10 tentativas/15min por IP) é compartilhado entre a suíte de testes de backend e os checks de browser quando executados em sequência rápida na mesma sessão, causando 429 esporádico em reruns completos. Isso é esperado pelo próprio design de segurança do login e não afeta usuários reais. Se re-executar toda a suíte (backend+browser) muitas vezes em poucos minutos, espaçar as chamadas ou reiniciar o backend entre lotes evita o 429."
+  ],
+  "notes": [
+    "Máscara de comanda foi restaurada para '###' ao final da execução (confirmado via GET /api/configuracoes).",
+    "Todos os dados de teste usam prefixo/numeração isolada (mesas 500-999 aleatórias, usuários 'tscheck-*', motivos 'tscheck ...') e não tocam mesas/pedidos/usuários semeados (1-6, 001-004, dev/admin/atendente)."
+  ]
+}

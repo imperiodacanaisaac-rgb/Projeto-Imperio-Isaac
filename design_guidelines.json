@@ -1,0 +1,283 @@
+{
+  "theme_strategy": {
+    "concept": "Império Da Cana - Modern Artisanal Brazilian Pastelaria & Caldo de Cana POS & Operations Platform",
+    "theme_mode": "dual_mode_with_persistence",
+    "primary_target": "Tablet 768-1024px touch-optimized + Responsive Desktop/Mobile",
+    "palette_identity": "Cane Green (#16a34a) & Pure Warm Gold (#facc15) accented with artisanal Brazilian warmth (amber crisp pastry, sugar cane fresh green, slate stone)",
+    "aesthetic_fusion": "Precision POS Speed Grid + Artisanal Brazilian Pastelaria warmth + Tactical Touch Affordances"
+  },
+  "typography": {
+    "font_family_heading": "'Plus Jakarta Sans Variable', sans-serif",
+    "font_family_sans": "'DM Sans Variable', sans-serif",
+    "font_family_mono": "'JetBrains Mono Variable', monospace",
+    "css_import": "@import \"@fontsource-variable/plus-jakarta-sans\";\n@import \"@fontsource-variable/dm-sans\";\n@import \"@fontsource-variable/jetbrains-mono\";",
+    "scale_px": {
+      "display": 48,
+      "h1": 36,
+      "h2": 28,
+      "h3": 22,
+      "h4": 18,
+      "body": 15,
+      "caption": 13
+    },
+    "letter_spacing": {
+      "hero": "tracking-tight",
+      "heading": "tracking-tight",
+      "overline": "tracking-[0.15em] uppercase",
+      "mono_numbers": "tabular-nums tracking-normal"
+    }
+  },
+  "colors": {
+    "accent": "#16a34a",
+    "on_accent": "#ffffff",
+    "secondary_gold": "#facc15",
+    "on_secondary_gold": "#1e293b",
+    "status_colors": {
+      "mesa_livre": "#16a34a",
+      "mesa_ocupada": "#dc2626",
+      "mesa_reservada": "#eab308",
+      "mesa_manutencao": "#64748b",
+      "success": "#22c55e",
+      "error": "#ef4444",
+      "warning": "#eab308",
+      "info": "#0284c7"
+    },
+    "surfaces": [
+      {
+        "name": "page_light",
+        "kind": "solid",
+        "bg": "#f8fafc",
+        "on_bg": "#0f172a",
+        "on_bg_muted": "#475569",
+        "roles": {
+          "link": "#15803d",
+          "error": "#b91c1c",
+          "success": "#15803d",
+          "warning": "#a16207"
+        }
+      },
+      {
+        "name": "page_dark",
+        "kind": "solid",
+        "bg": "#0b1120",
+        "on_bg": "#f8fafc",
+        "on_bg_muted": "#94a3b8",
+        "roles": {
+          "link": "#4ade80",
+          "error": "#f87171",
+          "success": "#4ade80",
+          "warning": "#fde047"
+        }
+      },
+      {
+        "name": "panel_light",
+        "kind": "solid",
+        "bg": "#ffffff",
+        "on_bg": "#0f172a",
+        "on_bg_muted": "#64748b"
+      },
+      {
+        "name": "panel_dark",
+        "kind": "solid",
+        "bg": "#131e32",
+        "on_bg": "#f8fafc",
+        "on_bg_muted": "#94a3b8"
+      },
+      {
+        "name": "topbar_light",
+        "kind": "solid",
+        "bg": "#ffffff",
+        "on_bg": "#0f172a",
+        "on_bg_muted": "#475569"
+      },
+      {
+        "name": "topbar_dark",
+        "kind": "solid",
+        "bg": "#0f172a",
+        "on_bg": "#f8fafc",
+        "on_bg_muted": "#94a3b8"
+      },
+      {
+        "name": "sidebar_light",
+        "kind": "solid",
+        "bg": "#064e3b",
+        "on_bg": "#ffffff",
+        "on_bg_muted": "#a7f3d0"
+      },
+      {
+        "name": "sidebar_dark",
+        "kind": "solid",
+        "bg": "#042f2e",
+        "on_bg": "#f8fafc",
+        "on_bg_muted": "#99f6e4"
+      },
+      {
+        "name": "hero_login",
+        "kind": "image",
+        "contrast_against": "#064e3b",
+        "guarantee": "scrim: linear-gradient(135deg, rgba(6,78,59,0.95) 0%, rgba(15,23,42,0.92) 100%)",
+        "on_bg": "#ffffff",
+        "on_bg_muted": "#cbd5e1",
+        "roles": {
+          "link": "#facc15",
+          "error": "#fca5a5",
+          "success": "#86efac"
+        }
+      },
+      {
+        "name": "badge_gold",
+        "kind": "solid",
+        "bg": "#fef08a",
+        "on_bg": "#713f12",
+        "on_bg_muted": "#854d0e"
+      },
+      {
+        "name": "badge_green",
+        "kind": "solid",
+        "bg": "#dcfce7",
+        "on_bg": "#14532d",
+        "on_bg_muted": "#166534"
+      },
+      {
+        "name": "comanda_paper",
+        "kind": "solid",
+        "bg": "#fefce8",
+        "on_bg": "#1c1917",
+        "on_bg_muted": "#57534e"
+      }
+    ]
+  },
+  "entry_surfaces": {
+    "/": "split branded authentication & entry dashboard — left artisanal showcase banner with cane gold branding, right role-aware login & quick switch selector",
+    "/login": "split branded authentication — left deep green & cane gold brand illustration panel, right elevated credentials form with DEV/ADMIN/ATENDENTE quick fill tabs",
+    "/dashboard": "operational command deck — top KPI metric cards with gold/green badges, middle interactive live sales trend & quick actions, bottom recent orders feed",
+    "/mesas": "tactical visual table grid with live timer, status filter pills, and quick comanda drawer for instant waiter interaction",
+    "/novo-pedido": "high-speed dual-pane POS terminal — left category tabs and responsive product card grid, right sticky live comanda cart with instant checkout & receipt trigger"
+  },
+  "index_css_tokens": {
+    "theme_block": "@theme inline {\n  --color-brand-green: #16a34a;\n  --color-brand-green-dark: #15803d;\n  --color-brand-green-deep: #064e3b;\n  --color-brand-gold: #facc15;\n  --color-brand-gold-dark: #eab308;\n  --color-mesa-livre: #16a34a;\n  --color-mesa-ocupada: #dc2626;\n  --color-mesa-reservada: #eab308;\n  --color-mesa-manutencao: #64748b;\n  --font-sans: 'DM Sans Variable', sans-serif;\n  --font-heading: 'Plus Jakarta Sans Variable', sans-serif;\n  --font-mono: 'JetBrains Mono Variable', monospace;\n}",
+    "root_light": ":root {\n  --background: #f8fafc;\n  --foreground: #0f172a;\n  --card: #ffffff;\n  --card-foreground: #0f172a;\n  --popover: #ffffff;\n  --popover-foreground: #0f172a;\n  --primary: #16a34a;\n  --primary-foreground: #ffffff;\n  --secondary: #fef08a;\n  --secondary-foreground: #713f12;\n  --muted: #f1f5f9;\n  --muted-foreground: #64748b;\n  --accent: #dcfce7;\n  --accent-foreground: #14532d;\n  --destructive: #ef4444;\n  --destructive-foreground: #ffffff;\n  --border: #e2e8f0;\n  --input: #cbd5e1;\n  --ring: #16a34a;\n  --radius: 0.625rem;\n}",
+    "dark_tokens": ".dark {\n  --background: #0b1120;\n  --foreground: #f8fafc;\n  --card: #131e32;\n  --card-foreground: #f8fafc;\n  --popover: #131e32;\n  --popover-foreground: #f8fafc;\n  --primary: #22c55e;\n  --primary-foreground: #052e16;\n  --secondary: #3b2a05;\n  --secondary-foreground: #fef08a;\n  --muted: #1e293b;\n  --muted-foreground: #94a3b8;\n  --accent: #064e3b;\n  --accent-foreground: #a7f3d0;\n  --destructive: #dc2626;\n  --destructive-foreground: #ffffff;\n  --border: #24344d;\n  --input: #334155;\n  --ring: #22c55e;\n}"
+  },
+  "layout_and_grids": {
+    "viewport_strategy": "Tablet-First POS (768px - 1024px) optimized for fingers/touch target sizes (min 44px tap targets) + responsive desktop and mobile drawers",
+    "topbar": "Fixed 64px header: Logo icon + 'Império Da Cana' + Establishment subtitle + Quick Stat/Shift indicator + User avatar & Role badge (DEV/ADMIN/ATENDENTE in distinctive colors) + Light/Dark theme toggle + Help '?' quick guide trigger + Logout button",
+    "sidebar": "Collapsible sidebar (240px expanded, 72px icon-only, slide-over sheet on mobile/tablet portrait). Navigation items with active pill indicator: Dashboard, Mesas, Novo Pedido, Pedidos, Caixa, Produtos, Funcionários, Relatórios, Configurações, Usuários, Logs",
+    "mesas_grid": "Auto-fit responsive grid (`grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6`). Each mesa card has top status pill, number in large bold display, seated elapsed timer, current total (R$), and quick actions (Abrir Comanda, Ver Detalhes, Liberar)",
+    "novo_pedido_layout": "2-Column Split POS layout: Left column (60-65% width) with sticky horizontal category tabs (Pasteis Salgados, Pasteis Doces, Caldo de Cana, Combos, Bebidas, Adicionais), search bar, and 2-3 column product cards with image, price, and instant (+) (-) buttons. Right column (35-40% width) sticky comanda order summary cart with mesa/client selector, item list with notes, subtotal, discount, total, and primary action 'Finalizar & Imprimir Comanda'",
+    "comanda_receipt_modal": "Artisanal thermal print preview card (#fefce8 warm paper with jagged edge CSS border or mono dashed lines), showing establishment header, CNPJ, Date/Time, Comanda #, Table #, Itemized table with quantity and unit price, payment method, change/troco, and browser `window.print()` friendly styling"
+  },
+  "components_strategy": {
+    "ui_primitives": "Shadcn on @base-ui/react located in @/components/ui/ (button, card, dialog, dropdown-menu, input, label, select, sheet, sonner, table, tabs, badge)",
+    "custom_domain_components": [
+      {
+        "name": "Topbar",
+        "path": "frontend/src/components/layout/Topbar.tsx",
+        "purpose": "Global operational header with status indicator, role badge, theme toggle, help modal button, and quick cashier summary"
+      },
+      {
+        "name": "Sidebar",
+        "path": "frontend/src/components/layout/Sidebar.tsx",
+        "purpose": "Role-filtered dynamic sidebar with active state highlight, collapsed touch mode, and quick shortcut badges"
+      },
+      {
+        "name": "MesaCard",
+        "path": "frontend/src/components/mesas/MesaCard.tsx",
+        "purpose": "Interactive table card with status glow border, status badge, elapsed time, live comanda total, and action dropdown"
+      },
+      {
+        "name": "PosProductCard",
+        "path": "frontend/src/components/pos/PosProductCard.tsx",
+        "purpose": "Touch-friendly product card with thumbnail, category badge, large price tag, and tap-to-add animation"
+      },
+      {
+        "name": "PosCartDrawer",
+        "path": "frontend/src/components/pos/PosCartDrawer.tsx",
+        "purpose": "Live shopping cart with item customizations (e.g. 'com limão', 'com gengibre', 'sem cebola'), quantity controls, and one-tap checkout"
+      },
+      {
+        "name": "ComandaPrintModal",
+        "path": "frontend/src/components/pos/ComandaPrintModal.tsx",
+        "purpose": "Thermal receipt printer simulator with customizable comanda header/footer mask, QR code/barcode simulation, and auto-print trigger"
+      },
+      {
+        "name": "PaymentModal",
+        "path": "frontend/src/components/pedidos/PaymentModal.tsx",
+        "purpose": "Payment processing modal with method selection (Dinheiro, PIX, Débito, Crédito, Vale), instant troco (change) calculator with quick banknote buttons (R$ 10, 20, 50, 100)"
+      },
+      {
+        "name": "QuickGuideModal",
+        "path": "frontend/src/components/common/QuickGuideModal.tsx",
+        "purpose": "Interactive help modal explaining keyboard shortcuts (F2 Novo Pedido, F4 Mesas, F8 Caixa), role permissions, and workflow tips"
+      },
+      {
+        "name": "RoleGuard",
+        "path": "frontend/src/components/auth/RoleGuard.tsx",
+        "purpose": "Permission boundary wrapping restricted sections (DEV has all access, ADMIN has operational+management, ATENDENTE has POS+Mesas+Pedidos)"
+      }
+    ]
+  },
+  "motion_and_interactions": {
+    "motion_library": "motion/react",
+    "rules": [
+      "Subtle micro-feedback on touch: buttons use active:scale-95 transition-transform duration-100",
+      "Cart item insertion uses staggered slide-in and scale animation",
+      "Table status change displays a brief glowing pulse animation in the matching status color",
+      "Never use universal 'transition: all'; specify transition-colors or transition-transform",
+      "Thermal receipt modal animates like a paper feed coming out of a POS register"
+    ]
+  },
+  "image_urls": {
+    "login_hero_bg": {
+      "url": "https://images.unsplash.com/photo-1767805983925-c9974dfd68bd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHwxfHxicmF6aWxpYW4lMjBzbmFjayUyMGZvb2QlMjBkcmluayUyMHJlc3RhdXJhbnR8ZW58MHx8fHwxNzg3ODAzNDcxfDA&ixlib=rb-4.1.0&q=85",
+      "category": "auth_cover",
+      "description": "Artisanal Brazilian pastel & cafe storefront ambiance"
+    },
+    "caldo_de_cana_jar": {
+      "url": "https://images.unsplash.com/photo-1488573783607-039006e42465?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxzdWdhcmNhbmUlMjBqdWljZSUyMGJyYXppbGlhbiUyMGZvb2QlMjBwYXN0cnklMjBwYXN0ZWx8ZW58MHx8fHwxNzg3ODAzNDcxfDA&ixlib=rb-4.1.0&q=85",
+      "category": "product_beverage",
+      "description": "Fresh golden-green cold sugarcane juice in a glass"
+    },
+    "pastel_assortment": {
+      "url": "https://images.unsplash.com/photo-1694097029110-3b4447dacb1f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHw0fHxzdWdhcmNhbmUlMjBqdWljZSUyMGJyYXppbGlhbiUyMGZvb2QlMjBwYXN0cnklMjBwYXN0ZWx8ZW58MHx8fHwxNzg3ODAzNDcxfDA&ixlib=rb-4.1.0&q=85",
+      "category": "product_pastel",
+      "description": "Crispy golden fried Brazilian pastéis on a service tray"
+    },
+    "salgados_brazil": {
+      "url": "https://images.unsplash.com/photo-1588285210465-d0b47dd725ba?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHw0fHxicmF6aWxpYW4lMjBzbmFjayUyMGZvb2QlMjBkcmluayUyMHJlc3RhdXJhbnR8ZW58MHx8fHwxNzg3ODAzNDcxfDA&ixlib=rb-4.1.0&q=85",
+      "category": "product_snack",
+      "description": "Brazilian savory artisanal snacks and appetizers"
+    },
+    "combo_table": {
+      "url": "https://images.unsplash.com/photo-1601315977043-0ce330a30c1e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwyfHxzdWdhcmNhbmUlMjBqdWljZSUyMGJyYXppbGlhbiUyMGZvb2QlMjBwYXN0cnklMjBwYXN0ZWx8ZW58MHx8fHwxNzg3ODAzNDcxfDA&ixlib=rb-4.1.0&q=85",
+      "category": "product_combo",
+      "description": "Traditional Brazilian snack and pastry presentation on rustic wood"
+    }
+  },
+  "accessibility_and_contrast": {
+    "wcag_aa_compliance": true,
+    "rules": [
+      "All text on brand green (#16a34a) must use crisp pure white (#ffffff) or deep forest dark (#064e3b) backgrounds for minimum 4.5:1 ratio",
+      "All text on secondary gold (#facc15) must use slate-900 / dark brown (#1e293b / #713f12) - never light text on gold",
+      "Table status cards use both distinctive border colors AND text status badges so color-blind operators can differentiate (Livre, Ocupada, Reservada, Manutenção)",
+      "All form inputs and buttons have visible focus rings with `focus-visible:ring-2 focus-visible:ring-emerald-500`",
+      "All interactive elements, buttons, inputs, tabs, and status cards MUST have unambiguous `data-testid` attributes (e.g. `data-testid=\"mesa-card-1\"`, `data-testid=\"btn-add-pastel-carne\"`, `data-testid=\"pos-cart-total\"`)"
+    ]
+  },
+  "instructions_to_main_agent": {
+    "key_deliverables": [
+      "1. Update `frontend/src/index.css` with the font imports (@fontsource-variable/plus-jakarta-sans, dm-sans, jetbrains-mono) and Tailwind v4 theme variables.",
+      "2. Implement persistent Light/Dark theme provider with next-themes or state synced with localStorage.",
+      "3. Seed rich realistic data in `backend/seed.py`: 12+ tables with different states, 25+ authentic menu items (Pastel de Carne, Pastel de Queijo, Pastel Especial da Casa, Caldo de Cana Puro 500ml/1L, Caldo de Cana com Limão, Caldo de Cana com Abacaxi, Caldo de Cana com Gengibre, Combos Imperador, Coxinha, etc.), 3 role accounts (dev@imperio.com / admin@imperio.com / atendente@imperio.com with password '123456'), orders history, cash register transactions, and audit logs.",
+      "4. Build the complete role-aware navigation and layout with topbar (shop title, user badge, theme toggle, quick guide modal button, logout) and collapsible sidebar.",
+      "5. Build 'Mesas' screen with 4 status colors (Livre=green, Ocupada=red, Reservada=yellow, Manutenção=gray) + status filter pills + instant action modal to open comanda or transfer table.",
+      "6. Build 'Novo Pedido' POS terminal with category tabs, search, item custom notes, side live cart, subtotal/tax/discount, and Comanda Print modal.",
+      "7. Build 'Pedidos' list with search, status filters, comanda viewer, and Payment Modal with instant troco (change) calculator.",
+      "8. Build 'Caixa' (Cash register) with opening/closing balance, sangria (cash-out), suprimento (cash-in), and current cash breakdown.",
+      "9. Build 'Relatórios' with Recharts (Sales by hour, Top 5 selling pastéis, Payment methods breakdown, Daily revenue) + CSV export.",
+      "10. Build 'Configurações do Sistema' with live Comanda receipt header/footer mask preview, establishment name, CNPJ, and primary color pickers.",
+      "11. Build 'Funcionários', 'Produtos' (with image preview, stock & category), 'Usuários', 'Logs de Atividade', and 'Guia Rápido' (?) modal.",
+      "12. Ensure all interactive and key metrics elements have `data-testid` attributes for automated testing."
+    ]
+  }
+}
