@@ -119,6 +119,31 @@ export interface ProdutoRanking {
   total: number;
 }
 
+// "Bebidas" inclui as categorias "caldo" (caldo de cana) e "bebida".
+export interface GrupoVendas {
+  grupo: string;
+  quantidade: number;
+  valor: number;
+}
+
+export interface VendaProduto {
+  produtoId: number;
+  produtoNome: string;
+  categoria: string;
+  grupo: string;
+  quantidade: number;
+  valor: number;
+}
+
+export interface VendasPorCategoria {
+  dataInicio: string;
+  dataFim: string;
+  grupos: GrupoVendas[];
+  produtos: VendaProduto[];
+  quantidadeTotal: number;
+  valorTotal: number;
+}
+
 export interface FormaTotal {
   forma: string;
   valor: number;
@@ -135,6 +160,7 @@ export interface Relatorio {
   ranking: ProdutoRanking[];
   formasPagamento: FormaTotal[];
   formaMaisUsada: string | null;
+  grupos: GrupoVendas[];
 }
 
 export interface Configuracao {

@@ -30,6 +30,15 @@ async def _contar_devs_ativos() -> int:
     return await db.usuarios.count_documents({"role": "DEV", "ativo": True})
 
 
+async def _limite_usuarios() -> int:
+    """Limite de usuários do estabelecimento, controlado pelo DEV nas Configurações."""
+    doc = await db.configuracoes.find_one({"chave": "limiteUsuarios"})
+    try:
+        return int(doc["valor"]) if doc and str(doc.get("valor", "")).strip() else 5
+    except (TypeError, ValueError):
+        return 5
+
+
 async def _buscar(uid: int) -> dict:
     doc = await db.usuarios.find_one({"id": uid})
     if not doc:
@@ -64,6 +73,18 @@ async def criar(body: UsuarioCreate, user: dict = Depends(permitir("ADMIN", "DEV
         raise HTTPException(
             status_code=403, detail="Administradores só podem criar usuários Atendente"
         )
+    # Limite de usuários do estabelecimento — o DEV não é limitado.
+    if user["role"] != "DEV":
+        limite = await _limite_usuarios()
+        total = await db.usuarios.count_documents({"ativo": True})
+        if total >= limite:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Limite de usuários atingido ({total}/{limite}). "
+                    "Entre em contato com o desenvolvedor para aumentar o limite."
+                ),
+            )
     if await db.usuarios.find_one({"usuario": login}):
         raise HTTPException(status_code=400, detail="Já existe um usuário com este nome de acesso")
 
@@ -94,6 +115,15 @@ async def editar(uid: int, body: UsuarioUpdate, user: dict = Depends(usuario_atu
             raise HTTPException(
                 status_code=403, detail="Você não pode editar este usuário"
             )
+    # O atendente não altera o próprio nome de login nem o próprio nome de exibição.
+    if proprio and user["role"] == "ATENDENTE":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Atendentes não podem alterar os próprios dados de acesso. "
+                "Solicite a alteração ao administrador."
+            ),
+        )
     campos: dict = {}
     nome = limpo(body.nome)
     login = limpo(body.usuario)
@@ -116,6 +146,15 @@ async def alterar_senha(uid: int, body: SenhaUpdate, user: dict = Depends(usuari
     alvo = await _buscar(uid)
     proprio = user["id"] == uid
     if proprio:
+        # Atendentes não trocam a própria senha — apenas ADMIN/DEV redefinem.
+        if user["role"] == "ATENDENTE":
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Atendentes não podem alterar a própria senha. "
+                    "Solicite a redefinição ao administrador."
+                ),
+            )
         if not body.senhaAtual or not verificar_senha(body.senhaAtual, alvo["senha"]):
             raise HTTPException(status_code=400, detail="Senha atual incorreta")
     else:

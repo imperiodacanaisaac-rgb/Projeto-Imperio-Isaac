@@ -167,6 +167,12 @@
     font-family: var(--font-mono);
 }
 
+/* Impressora térmica portátil de 58 mm (área imprimível ~48 mm) */
+@page {
+    size: 58mm auto;
+    margin: 0;
+}
+
 @media print {
     body * { visibility: hidden; }
     .comanda-print, .comanda-print * { visibility: visible; }
@@ -174,7 +180,14 @@
         position: absolute;
         left: 0;
         top: 0;
-        width: 100%;
+        width: 48mm;
+        padding: 2mm 1mm;
+        margin: 0;
+        background: #fff;
+        color: #000;
+        font-family: var(--font-mono);
+        font-size: 9pt;
+        line-height: 1.25;
         box-shadow: none;
         border: none;
     }

@@ -56,7 +56,15 @@ async def criar(body: ProdutoCreate, user: dict = Depends(permitir("ADMIN", "DEV
 @router.put("/{pid}", response_model=Produto)
 async def editar(pid: int, body: ProdutoUpdate, _user: dict = Depends(permitir("ADMIN", "DEV"))):
     await _buscar(pid)
-    campos = {k: v for k, v in body.model_dump(exclude_none=True).items()}
+    # exclude_unset (e não exclude_none): campos opcionais enviados como null precisam
+    # ser gravados para permitir REMOVER a imagem/descrição do produto.
+    campos = body.model_dump(exclude_unset=True)
+
+    # Campos obrigatórios não podem ser apagados com null.
+    for obrigatorio in ("nome", "preco", "categoria", "ordem"):
+        if obrigatorio in campos and campos[obrigatorio] is None:
+            del campos[obrigatorio]
+
     if "nome" in campos:
         nome = limpo(campos["nome"])
         if not nome:
@@ -64,6 +72,12 @@ async def editar(pid: int, body: ProdutoUpdate, _user: dict = Depends(permitir("
         campos["nome"] = nome
     if "preco" in campos:
         campos["preco"] = round(campos["preco"], 2)
+    # Opcionais aceitam null/"" como remoção explícita.
+    if "imagemUrl" in campos:
+        campos["imagemUrl"] = limpo(campos["imagemUrl"])
+    if "descricao" in campos:
+        campos["descricao"] = limpo(campos["descricao"])
+
     if not campos:
         raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")
     await db.produtos.update_one({"id": pid}, {"$set": campos})

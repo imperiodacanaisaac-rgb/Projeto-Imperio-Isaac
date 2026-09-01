@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { DoorOpen, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -68,6 +68,16 @@ export default function Mesas() {
     onSuccess: () => {
       toast.success("Mesa excluída");
       setDetalhe(null);
+      invalidar();
+    },
+    onError: (e) => toast.error(mensagemErro(e)),
+  });
+
+  const liberar = useMutation({
+    mutationFn: (id: number) => apiPatch<Mesa>(`/mesas/${id}/liberar`, {}),
+    onSuccess: (m) => {
+      toast.success(`Mesa ${m.numero} liberada`);
+      setDetalhe(m);
       invalidar();
     },
     onError: (e) => toast.error(mensagemErro(e)),
@@ -213,6 +223,26 @@ export default function Mesas() {
                     </li>
                   ))}
                 </ul>
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground">
+                  O pagamento <strong>não libera</strong> a mesa: o cliente pode continuar sentado
+                  e fazer novos pedidos. Libere a mesa manualmente quando ele for embora.
+                </p>
+                <Button
+                  className="mt-3 w-full active:scale-95"
+                  disabled={detalhe.status === "LIVRE" || liberar.isPending}
+                  onClick={() => liberar.mutate(detalhe.id)}
+                  data-testid="botao-liberar-mesa"
+                >
+                  <DoorOpen className="mr-1.5 size-4" />
+                  {liberar.isPending
+                    ? "Liberando..."
+                    : detalhe.status === "LIVRE"
+                      ? "Mesa já está livre"
+                      : "Liberar mesa"}
+                </Button>
               </div>
 
               <Button

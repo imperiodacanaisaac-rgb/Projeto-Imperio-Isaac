@@ -68,6 +68,7 @@ export default function Configuracoes() {
   const numeroAtual = Number((proxima.data?.proxima ?? "1").replace(/\D/g, "")) || 1;
 
   const campos: { chave: string; label: string; tipo?: string }[] = [
+    { chave: "limiteUsuarios", label: "Limite de usuários do estabelecimento", tipo: "number" },
     { chave: "nomeEstabelecimento", label: "Nome do estabelecimento" },
     { chave: "corPrimaria", label: "Cor primária", tipo: "color" },
     { chave: "corSecundaria", label: "Cor secundária", tipo: "color" },
@@ -117,7 +118,13 @@ export default function Configuracoes() {
       </section>
 
       <section className="space-y-4 rounded-xl border border-border bg-card p-5">
-        <h2 className="font-heading text-lg font-bold">Personalização visual</h2>
+        <h2 className="font-heading text-lg font-bold">
+          Personalização visual e limites
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          O limite de usuários é aplicado no backend quando o administrador cadastra
+          funcionários. O Desenvolvedor não é limitado.
+        </p>
         {campos.map((c) => (
           <div key={c.chave} className="space-y-2">
             <Label htmlFor={c.chave}>{c.label}</Label>

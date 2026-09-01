@@ -72,6 +72,27 @@ async def mudar_status(mid: int, body: MesaStatusUpdate, _user: dict = Depends(u
     return Mesa(**await _buscar(mid))
 
 
+@router.patch("/{mid}/liberar", response_model=Mesa)
+async def liberar(mid: int, user: dict = Depends(usuario_atual)):
+    """Liberação MANUAL da mesa. O pagamento não libera a mesa automaticamente:
+    o cliente pode continuar sentado e fazer novos pedidos."""
+    mesa = await _buscar(mid)
+    abertos = await db.pedidos.count_documents({"mesaId": mid, "status": "ABERTO"})
+    if abertos:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Esta mesa possui {abertos} pedido(s) em aberto. "
+                "Receba o pagamento ou cancele antes de liberar a mesa."
+            ),
+        )
+    if mesa["status"] == "LIVRE":
+        raise HTTPException(status_code=400, detail="Esta mesa já está livre")
+    await db.mesas.update_one({"id": mid}, {"$set": {"status": "LIVRE"}})
+    await registrar_log(user["id"], "LIBEROU_MESA", f"Mesa {mesa['numero']}")
+    return Mesa(**await _buscar(mid))
+
+
 @router.delete("/{mid}")
 async def excluir(mid: int, user: dict = Depends(usuario_atual)):
     mesa = await _buscar(mid)

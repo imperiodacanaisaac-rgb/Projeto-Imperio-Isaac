@@ -1,0 +1,47 @@
+{
+  "mode": "retest",
+  "app_url": "https://gestor-vendas-cana.preview.emergentagent.com",
+  "summary": "Retest of the 2 pending items from the previous iteration. All other criteria were already validated and were not re-executed per briefing.",
+  "passed": 4,
+  "failed": 0,
+  "flaky": 0,
+  "blocked": 0,
+  "test_error": 0,
+  "checks": [
+    {
+      "criterion": "PUT /api/produtos/{id} correctly persists explicit removal of imagemUrl (exclude_unset fix) plus name-protection / blank-name validation",
+      "name": "test_tscheck_produtos_remover_imagem",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /produtos with imagemUrl=/marca/refrigerante.jpg -> 201, imagemUrl set. PUT {imagemUrl:null} -> 200, imagemUrl now null; GET /produtos confirms null persisted. PUT {imagemUrl:/marca/pastel.jpg} -> 200 (icon swap works). PUT {nome:null, preco:6.75} -> 200, nome unchanged, preco updated (required field protected from null-erasure). PUT {nome:null} alone -> 400 'Nenhum campo válido para atualizar' (no field left to persist, name confirmed intact via GET). PUT {nome:'   '} -> 400. Full suite: 11 passed in 2.93s."
+    },
+    {
+      "criterion": "RETESTE DO BUG CORRIGIDO — remoção da imagem do produto persiste (UI)",
+      "name": "produtos-biblioteca-icones-troca-remocao",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Admin creates product with icon from library, card renders image (naturalWidth>0), opens edit, clicks 'Remover', input clears, saves. API cross-check: GET /api/produtos for that product returns imagemUrl null/empty confirming the fix. Re-run of persisted check (reran-persisted) PASSED with 4 screenshots."
+    },
+    {
+      "criterion": "Backend user-limit enforcement (400 on limit reached, DEV-only PUT /configuracoes/limiteUsuarios, 403 for admin, 400 for invalid values 0/abc)",
+      "name": "test_tscheck_limite_usuarios",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "PUT limiteUsuarios by admin -> 403. PUT valor=0 by dev -> 400. PUT valor=abc by dev -> 400. Set limite=1 (dev) -> 200; POST /usuarios by admin -> 400 with 'limite' in detail message. Set limite=1000 (dev) -> 200; POST /usuarios by admin -> 201. Cleanup restores limite=5 and deletes created user. 11 passed in full backend suite."
+    },
+    {
+      "criterion": "Conclusão do check pendente — limite de usuários no backend e ajuste pelo DEV (UI end-to-end)",
+      "name": "limite-usuarios-admin-bloqueado-dev-ajusta",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "DEV sets limiteUsuarios=1 via API; admin tries to create employee in /funcionarios UI -> error text '/limite de usuários atingido/i' visible. DEV logs into /configuracoes, raises limit to 1000, confirmed persisted via GET /api/configuracoes. Admin retries creation -> succeeds, new row visible. Cleanup deletes the created user and restores limiteUsuarios=5. First attempt hit environment-artifact 429 from the login rate limiter (script does 5 logins per run, prior manual/API calls in the same session pushed cumulative logins over the 10/15min cap); restarted backend (sudo supervisorctl restart backend) to clear the in-memory limiter per briefing instructions and reran cleanly -> PASSED. Classified as flaky/environment artifact, not an app bug."
+    }
+  ],
+  "bugs": [],
+  "action_items": [
+    "Environment note: repeated logins across manual curl checks + browser checks in the same short session can trip the 10-req/15min in-memory login rate limiter, causing transient 429s (e.g. mid-cleanup 'usuarios.find is not a function' when a login response was a 429 error body instead of a token). Not an app bug — restarting the backend clears it, as documented in the briefing.",
+    "Residual state note: one pre-existing tscheck-* product (id 13, created in an earlier iteration) could not be hard-deleted because it is already referenced by a historical pedido ('Este produto já foi vendido. Desative-o em vez de excluir.' — correct business-rule protection). It was deactivated (ativo=false) instead, so it no longer appears among the 5 active seeded products. Final backend state confirmed: 3 users (dev/admin/atendente), limiteUsuarios='5', 5 active products (5 seeded + 1 inactive tscheck residue not deletable due to sales history)."
+  ],
+  "retest_needed": false,
+  "notes": "Backend suite re-run in full (11/11 passed) before the two targeted checks. Removed 3 orphan .meta.json scratch files (debug-mesa-select, debug-novo-pedido-buttons, debug-produtos-remover-network) left over from prior debugging session in /app/.emergent/scripts/checks/ — no matching .mjs scripts existed for them. All other 14 previously-passing browser checks and other backend test files were left untouched per retest-mode instructions (not re-executed, no changes needed)."
+}

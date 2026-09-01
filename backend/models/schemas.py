@@ -229,6 +229,32 @@ class ProdutoRanking(BaseModel):
     total: float
 
 
+# Agrupamento de vendas por grupo de categoria.
+# "Bebidas" inclui as categorias "caldo" (caldo de cana) e "bebida".
+class GrupoVendas(BaseModel):
+    grupo: str
+    quantidade: float
+    valor: float
+
+
+class VendaProduto(BaseModel):
+    produtoId: int
+    produtoNome: str
+    categoria: str
+    grupo: str
+    quantidade: float
+    valor: float
+
+
+class VendasPorCategoria(BaseModel):
+    dataInicio: str
+    dataFim: str
+    grupos: list[GrupoVendas]
+    produtos: list[VendaProduto]
+    quantidadeTotal: float
+    valorTotal: float
+
+
 class FormaTotal(BaseModel):
     forma: str
     valor: float
@@ -245,6 +271,7 @@ class Relatorio(BaseModel):
     ranking: list[ProdutoRanking]
     formasPagamento: list[FormaTotal]
     formaMaisUsada: Optional[str] = None
+    grupos: list[GrupoVendas] = []
 
 
 # ---------- configuracoes / logs / dashboards ----------

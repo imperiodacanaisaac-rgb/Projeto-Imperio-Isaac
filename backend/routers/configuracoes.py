@@ -13,6 +13,7 @@ PADROES = {
     "corSecundaria": "#facc15",
     "logoUrl": "",
     "textoBotaoNovoPedido": "Novo Pedido",
+    "limiteUsuarios": "5",
 }
 
 
@@ -46,6 +47,11 @@ async def atualizar(chave: str, body: ConfigUpdate, user: dict = Depends(permiti
         raise HTTPException(
             status_code=400, detail="A máscara da comanda deve conter ao menos um '#'"
         )
+    if chave == "limiteUsuarios":
+        if not valor.isdigit() or int(valor) < 1:
+            raise HTTPException(
+                status_code=400, detail="O limite de usuários deve ser um número maior que zero"
+            )
     if chave == "nomeEstabelecimento" and not limpo(valor):
         raise HTTPException(status_code=400, detail="O nome do estabelecimento é obrigatório")
     await db.configuracoes.update_one(

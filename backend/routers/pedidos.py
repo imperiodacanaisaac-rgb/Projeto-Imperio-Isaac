@@ -294,7 +294,8 @@ async def pagar(pid: int, body: PagamentoIn, user: dict = Depends(usuario_atual)
             "criadoEm": datetime.now(timezone.utc),
         }
     )
-    await liberar_mesa(doc.get("mesaId"), ignorar_pedido=pid)
+    # A mesa NÃO é liberada no pagamento: o cliente pode continuar sentado e
+    # pedir novamente. A liberação é manual (PATCH /api/mesas/{id}/liberar).
     await registrar_log(
         user["id"],
         "CONFIRMOU_PAGAMENTO",

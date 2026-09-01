@@ -30,27 +30,47 @@ implementadas nesse stack.
 
 | Recurso | ATENDENTE | ADMIN | DEV |
 |---|---|---|---|
-| Mesas (CRUD + status) | ✅ | ✅ | ✅ |
+| Mesas (CRUD + status + **liberar**) | ✅ | ✅ | ✅ |
 | Pedidos, pagamento, cancelamento | ✅ | ✅ | ✅ |
-| Próprio perfil/senha/tema | ✅ | ✅ | ✅ |
-| Produtos (CRUD) | ❌ | ✅ | ✅ |
-| Caixa + Relatórios | ❌ | ✅ | ✅ |
+| Próprio tema | ✅ | ✅ | ✅ |
+| Próprio nome / login / senha | ❌ (403) | ✅ | ✅ |
+| Produtos (CRUD + imagem) | ❌ | ✅ | ✅ |
+| Caixa + Relatórios + vendas por categoria | ❌ | ✅ | ✅ |
 | Funcionários | ❌ | só ATENDENTE | todos |
 | Configurações / Logs / Usuários | ❌ | ❌ | ✅ |
+| Limite de usuários (definir) | ❌ | ❌ | ✅ |
 
 Regras críticas implementadas:
 - ADMIN não cria/edita/desativa ADMIN nem DEV (403).
+- **ATENDENTE não altera o próprio nome, login nem a própria senha** (403 no backend;
+  a tela `/perfil` fica somente leitura, permitindo apenas alternar o tema). Somente
+  ADMIN/DEV redefinem a senha de um atendente.
+- Atendente não pode escalar a própria permissão: `POST /api/usuarios` exige ADMIN/DEV.
 - Não é possível desativar/excluir o **único DEV ativo** →
   "Deve existir ao menos um Desenvolvedor ativo no sistema".
 - Autodesativação bloqueada.
-- Exclusão de usuário só DEV, e bloqueada se houver pedidos vinculados.
+- Exclusão de usuário só DEV, e bloqueada se houver pedidos vinculados
+  (histórico de pedidos nunca é apagado junto com o usuário).
 - Atendente só cancela pedido próprio.
+
+## Limite de usuários
+
+Configuração `limiteUsuarios` (padrão **5**), editável apenas pelo DEV em
+`/configuracoes` (`PUT /api/configuracoes/limiteUsuarios`, validado como inteiro ≥ 1).
+Aplicado no backend em `POST /api/usuarios` contando **usuários ativos cadastrados**
+(não sessões online): ao atingir o limite, o ADMIN recebe 400 com
+"Limite de usuários atingido (X/Y). Entre em contato com o desenvolvedor para
+aumentar o limite." O DEV não é limitado, então sempre consegue destravar o cadastro.
+Não há como contornar pela interface — a regra vive na API.
 
 ## Modelo de dados (coleções Mongo, ids inteiros via `db.contadores`)
 
 - `usuarios`: id, nome, usuario (único), senha (hash), role, tema, ativo, fotoUrl, criadoEm
 - `mesas`: id, numero (único), status (LIVRE/OCUPADA/RESERVADA/MANUTENCAO), capacidade, observacao
 - `produtos`: id, nome, descricao, preco, categoria (caldo/pastel/bebida/outro), imagemUrl, ativo, ordem
+  - `PUT /api/produtos/{id}` usa `model_dump(exclude_unset=True)` (não `exclude_none`), para que
+    `imagemUrl: null` / `descricao: null` sejam gravados e a remoção explícita funcione.
+    Campos obrigatórios (nome, preco, categoria, ordem) são protegidos contra apagamento por null.
 - `pedidos`: id, numeroComanda (único), clienteNome, mesaId, atendenteId, status
   (ABERTO/PAGO/CANCELADO), observacao, canceladoMotivo, `itens[]` embutidos
   (produtoId, produtoNome, quantidade, **precoUnit congelado**, observacao),
@@ -78,34 +98,59 @@ O contador **nunca** reseta automaticamente — só DEV via
 ## Fluxos principais
 
 1. **Novo pedido** (`/pedidos/novo`): cliente opcional, mesa ou Balcão, abas por
-   categoria, carrinho com +/- e remover, total ao vivo, "Finalizar Pedido" →
-   comanda gerada + modal de impressão (`window.print`, CSS `@media print`).
+   categoria (com miniatura do produto), carrinho com +/- e remover, total ao vivo,
+   "Finalizar Pedido" → comanda gerada + modal de impressão.
    Se houver mesa, ela vira OCUPADA.
 2. **Pagamento** (`/pedidos` → Detalhes → Confirmar Pagamento): forma
    DINHEIRO/PIX/CREDITO/DEBITO; em dinheiro calcula troco. Grava `pagamento`,
-   status → PAGO, insere ENTRADA no caixa (categoria `venda`), libera a mesa
-   se não houver outro pedido ABERTO nela. Guarda atômica
+   status → PAGO, insere ENTRADA no caixa (categoria `venda`). Guarda atômica
    (`find_one_and_update` com `status: ABERTO`) contra pagamento duplo →
    "Este pedido já foi pago por outro usuário".
+   **O pagamento NÃO libera a mesa** (ver "Liberação manual de mesa").
 3. **Cancelamento**: motivo obrigatório (mín. 3 chars), só se ABERTO, libera a mesa.
 4. **Caixa**: resumo do dia, lançamento de saída (ADMIN/DEV, mín. R$ 0,01),
    histórico filtrável, gráfico de entradas.
 5. **Relatórios**: período, faturamento, ticket médio, ranking, pizza de formas de
-   pagamento, exportar CSV.
+   pagamento, exportar CSV, **separação Pastéis x Bebidas** (ver abaixo).
+
+## Liberação manual de mesa
+
+`PAGAMENTO ≠ LIBERAÇÃO`. O cliente pode pagar e continuar sentado, fazendo novos
+pedidos na mesma mesa. A mesa só volta a LIVRE quando alguém aciona
+`PATCH /api/mesas/{id}/liberar` (botão "Liberar mesa" no modal da mesa em `/mesas`,
+disponível também ao ATENDENTE). A liberação é bloqueada (400) se ainda houver
+pedido ABERTO na mesa, e registra log `LIBEROU_MESA`. O histórico de pedidos e
+pagamentos da mesa é preservado após a liberação.
+
+## Vendas por categoria (Pastéis x Bebidas)
+
+`GET /api/caixa/vendas-categorias?dataInicio&dataFim&grupo&produtoId` (ADMIN/DEV).
+O agrupamento reutiliza a **categoria já existente do produto** — nenhuma
+classificação paralela foi criada:
+
+- **Pastéis** ← categoria `pastel`
+- **Bebidas** ← categorias `caldo` (caldo de cana) **e** `bebida`
+- **Outros** ← categoria `outro`
+
+Retorna `grupos[]` (quantidade + valor por grupo) e `produtos[]` (detalhe por
+produto, com filtro opcional por grupo e/ou produto específico). O mesmo
+agrupamento também vem em `grupos` no `GET /api/caixa/relatorio`.
 
 ## Rotas da API (todas sob `/api`)
 
 - `auth`: POST `/auth/login`, GET `/auth/me`
 - `usuarios`: GET ``, GET `/{id}`, POST ``, PUT `/{id}`, PUT `/{id}/senha`,
   PUT `/{id}/tema`, PATCH `/{id}/status`, DELETE `/{id}`
-- `mesas`: GET ``, POST ``, PUT `/{id}`, PATCH `/{id}/status`, DELETE `/{id}`
+- `mesas`: GET ``, POST ``, PUT `/{id}`, PATCH `/{id}/status`,
+  **PATCH `/{id}/liberar`** (liberação manual), DELETE `/{id}`
 - `produtos`: GET `` (`?ativo=`, `?categoria=`), POST ``, PUT `/{id}`,
   PATCH `/{id}/status`, DELETE `/{id}`
 - `pedidos`: GET `` (`?status`, `?dataInicio`, `?dataFim`, `?numeroComanda`,
   `?mesaId`, `?meus`), POST ``, GET `/{id}`, PUT `/{id}`, PATCH `/{id}/cancelar`,
   POST `/{id}/pagamento`, GET `/{id}/comanda`
-- `caixa`: GET `/resumo`, GET `/movimentos`, POST `/movimentos`, GET `/relatorio`
-- `configuracoes`: GET `` (público), PUT `/{chave}` (DEV),
+- `caixa`: GET `/resumo`, GET `/movimentos`, POST `/movimentos`, GET `/relatorio`,
+  **GET `/vendas-categorias`** (Pastéis x Bebidas + filtro por grupo/produto)
+- `configuracoes`: GET `` (público), PUT `/{chave}` (DEV — inclui `limiteUsuarios`),
   PUT `/resetar-contador-comanda` (DEV)
 - `dashboard`: GET `/atendente`, `/admin`, `/dev`
 - `logs`: GET `` (DEV, `?usuarioId`, `?acao`)
@@ -118,10 +163,53 @@ O contador **nunca** reseta automaticamente — só DEV via
 `/configuracoes`, `/logs`, 404 e "Acesso Negado" customizados.
 Guia Rápido no botão "?" da barra superior, com seção extra por role.
 
+`/pedidos` tem dois layouts no mesmo componente: **cards empilhados** abaixo de
+`md` (botão "Detalhes" de largura total, altura 44px, sem scroll horizontal) e a
+**tabela original** de `md` para cima, preservada como estava.
+
 ## Tema
 
 `claro`/`escuro` via classe `dark` no `<html>`; persiste em `localStorage`
 (`imperio_tema`) **e** no perfil do usuário (`PUT /api/usuarios/{id}/tema`).
+
+## Imagens dos produtos (biblioteca de ícones)
+
+Reutiliza o campo **já existente** `produtos.imagemUrl` — nenhuma tabela/campo novo.
+`frontend/src/lib/iconesProdutos.ts` expõe 8 ícones servidos de
+`frontend/public/marca/` (pastel, caldo de cana, água, refrigerante, suco, café,
+salgado, genérico). Em `/produtos`, o formulário mostra a galeria clicável, um
+preview, o campo de URL livre e o botão "Remover". No cardápio (`/pedidos/novo`) e
+na grade de produtos a imagem aparece como miniatura; sem imagem usa o ícone padrão
+da categoria e `onError` cai no placeholder — imagem quebrada nunca estraga o layout.
+
+**Upload de arquivo não foi implementado** (decisão do usuário nesta rodada).
+
+## Identidade visual
+
+Poucas imagens, propositalmente: `login-hero.jpg` como fundo do painel esquerdo do
+login (com gradiente por cima para o formulário continuar legível), duas miniaturas
+(caldo + pastel) no topo do login em telas pequenas, e as miniaturas dos produtos no
+cardápio. Todas em `frontend/public/marca/` (~160 KB no total, 256px os ícones),
+com `loading="lazy"` nas miniaturas.
+
+## Impressão de comanda (58 mm)
+
+`frontend/src/lib/impressao.ts` — três caminhos **reais**, sem simulação:
+
+1. **Bluetooth** — Web Bluetooth (`navigator.bluetooth`), bytes ESC/POS enviados em
+   pacotes de 180 bytes na primeira característica gravável.
+2. **USB** — WebUSB (`navigator.usb`), ESC/POS via endpoint bulk OUT.
+3. **Sistema operacional** — `window.print()` com `@page { size: 58mm auto }` e
+   `.comanda-print` em 48 mm / 9pt monoespaçado.
+
+`detectarSuporte()` lê as APIs de verdade e exige `window.isSecureContext`; os botões
+de Bluetooth/USB ficam desabilitados quando a API não existe, com aviso explicando a
+limitação. Texto ESC/POS formatado em 32 colunas e sem acentos (impressoras térmicas
+simples não têm CP860 confiável).
+
+**Limitações reais**: Web Bluetooth/WebUSB não existem em iOS/Safari nem em Firefox —
+nesses casos só o caminho 3 funciona. No desktop Linux/Windows, o driver de impressora
+do sistema pode capturar o dispositivo USB e impedir o WebUSB.
 
 ## Desvios conscientes do documento original
 

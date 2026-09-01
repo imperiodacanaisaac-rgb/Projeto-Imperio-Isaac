@@ -154,51 +154,108 @@ export default function Pedidos() {
       {pedidos.isLoading && <Loading />}
 
       {pedidos.data && !pedidos.isError && (
-        <div className="rounded-xl border border-border bg-card">
+        <>
           {pedidos.data.length === 0 ? (
-            <VazioAviso texto="Nenhum pedido encontrado com estes filtros." testId="pedidos-vazio" />
+            <div className="rounded-xl border border-border bg-card">
+              <VazioAviso
+                texto="Nenhum pedido encontrado com estes filtros."
+                testId="pedidos-vazio"
+              />
+            </div>
           ) : (
-            <Table data-testid="tabela-pedidos">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Comanda</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Mesa</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Data/Hora</TableHead>
-                  <TableHead>Atendente</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Mobile: cards empilhados, sem scroll horizontal */}
+              <div className="space-y-3 md:hidden" data-testid="cards-pedidos-mobile">
                 {pedidos.data.map((p) => (
-                  <TableRow key={p.id} data-testid={`linha-pedido-${p.numeroComanda}`}>
-                    <TableCell className="font-mono font-bold">{p.numeroComanda}</TableCell>
-                    <TableCell>{p.clienteNome || "—"}</TableCell>
-                    <TableCell>{p.mesaNumero ? `Mesa ${p.mesaNumero}` : "Balcão"}</TableCell>
-                    <TableCell className="font-bold">{brl(p.total)}</TableCell>
-                    <TableCell>
+                  <div
+                    key={p.id}
+                    className="rounded-xl border border-border bg-card p-4"
+                    data-testid={`card-pedido-${p.numeroComanda}`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-base font-bold">{p.numeroComanda}</span>
                       <StatusBadge status={p.status} />
-                    </TableCell>
-                    <TableCell className="text-xs">{dataHora(p.criadoEm)}</TableCell>
-                    <TableCell className="text-xs">{p.atendenteNome}</TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setDetalhe(p)}
-                        data-testid={`botao-detalhe-${p.numeroComanda}`}
-                      >
-                        Detalhes
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                      <span className="ml-auto font-heading text-lg font-extrabold">
+                        {brl(p.total)}
+                      </span>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                      <div>
+                        <dt className="text-muted-foreground">Cliente</dt>
+                        <dd className="font-semibold">{p.clienteNome || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Mesa</dt>
+                        <dd className="font-semibold">
+                          {p.mesaNumero ? `Mesa ${p.mesaNumero}` : "Balcão"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Data/Hora</dt>
+                        <dd className="font-semibold">{dataHora(p.criadoEm)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Atendente</dt>
+                        <dd className="font-semibold">{p.atendenteNome}</dd>
+                      </div>
+                    </dl>
+                    <Button
+                      className="mt-3 h-11 w-full active:scale-95"
+                      variant="outline"
+                      onClick={() => setDetalhe(p)}
+                      data-testid={`botao-detalhe-mobile-${p.numeroComanda}`}
+                    >
+                      Detalhes
+                    </Button>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+
+              {/* Desktop/tablet: tabela original preservada */}
+              <div className="hidden rounded-xl border border-border bg-card md:block">
+                <Table data-testid="tabela-pedidos">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Comanda</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Mesa</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Data/Hora</TableHead>
+                      <TableHead>Atendente</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pedidos.data.map((p) => (
+                      <TableRow key={p.id} data-testid={`linha-pedido-${p.numeroComanda}`}>
+                        <TableCell className="font-mono font-bold">{p.numeroComanda}</TableCell>
+                        <TableCell>{p.clienteNome || "—"}</TableCell>
+                        <TableCell>{p.mesaNumero ? `Mesa ${p.mesaNumero}` : "Balcão"}</TableCell>
+                        <TableCell className="font-bold">{brl(p.total)}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={p.status} />
+                        </TableCell>
+                        <TableCell className="text-xs">{dataHora(p.criadoEm)}</TableCell>
+                        <TableCell className="text-xs">{p.atendenteNome}</TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setDetalhe(p)}
+                            data-testid={`botao-detalhe-${p.numeroComanda}`}
+                          >
+                            Detalhes
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
-        </div>
+        </>
       )}
 
       <Dialog open={!!detalhe && !pagando && !cancelando} onOpenChange={(v) => !v && setDetalhe(null)}>

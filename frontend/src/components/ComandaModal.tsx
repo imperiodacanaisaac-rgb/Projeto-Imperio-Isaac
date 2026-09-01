@@ -1,8 +1,17 @@
-import { Printer } from "lucide-react";
+import { useState } from "react";
+import { Bluetooth, Loader2, Printer, Usb } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { brl, dataHora, FORMA_LABEL } from "@/lib/types";
 import type { Pedido } from "@/lib/types";
+import {
+  detectarSuporte,
+  imprimirBluetooth,
+  imprimirPeloSistema,
+  imprimirUsb,
+  type DadosComanda,
+} from "@/lib/impressao";
 
 export function ComandaModal({
   pedido,
@@ -15,7 +24,48 @@ export function ComandaModal({
   aberto: boolean;
   onFechar: () => void;
 }) {
+  const [escolhendo, setEscolhendo] = useState(false);
+  const [enviando, setEnviando] = useState<"bluetooth" | "usb" | null>(null);
+  const suporte = detectarSuporte();
+
   if (!pedido) return null;
+
+  const dados: DadosComanda = {
+    estabelecimento,
+    numeroComanda: pedido.numeroComanda,
+    clienteNome: pedido.clienteNome,
+    mesaNumero: pedido.mesaNumero,
+    atendenteNome: pedido.atendenteNome,
+    criadoEm: pedido.criadoEm,
+    itens: pedido.itens.map((i) => ({
+      quantidade: i.quantidade,
+      produtoNome: i.produtoNome,
+      observacao: i.observacao,
+      subtotal: i.subtotal,
+    })),
+    total: pedido.total,
+    formaPagamento: pedido.pagamento ? FORMA_LABEL[pedido.pagamento.forma] : null,
+    troco: pedido.pagamento?.troco ?? null,
+  };
+
+  async function enviar(via: "bluetooth" | "usb") {
+    setEnviando(via);
+    try {
+      const nome = via === "bluetooth" ? await imprimirBluetooth(dados) : await imprimirUsb(dados);
+      toast.success(`Comanda enviada para ${nome}`);
+      setEscolhendo(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao enviar para a impressora";
+      if (/cancelled|cancelado|No device selected/i.test(msg)) {
+        toast.info("Nenhum dispositivo selecionado");
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setEnviando(null);
+    }
+  }
+
   return (
     <Dialog open={aberto} onOpenChange={(v) => !v && onFechar()}>
       <DialogContent className="sm:max-w-sm" data-testid="comanda-modal">
@@ -64,18 +114,91 @@ export function ComandaModal({
           <p className="mt-3 text-center text-[11px]">Obrigado pela preferência!</p>
         </div>
 
-        <div className="no-print flex gap-2">
-          <Button
-            className="flex-1 active:scale-95"
-            onClick={() => window.print()}
-            data-testid="botao-imprimir-comanda"
-          >
-            <Printer className="mr-1.5 size-4" /> Imprimir
-          </Button>
-          <Button variant="outline" onClick={onFechar} data-testid="botao-fechar-comanda">
-            Fechar
-          </Button>
-        </div>
+        {!escolhendo ? (
+          <div className="no-print flex gap-2">
+            <Button
+              className="flex-1 active:scale-95"
+              onClick={() => setEscolhendo(true)}
+              data-testid="botao-imprimir-comanda"
+            >
+              <Printer className="mr-1.5 size-4" /> Imprimir
+            </Button>
+            <Button variant="outline" onClick={onFechar} data-testid="botao-fechar-comanda">
+              Fechar
+            </Button>
+          </div>
+        ) : (
+          <div className="no-print space-y-2" data-testid="seletor-impressora">
+            <p className="text-sm font-semibold">Selecionar impressora (58 mm)</p>
+
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              disabled={!suporte.bluetooth || enviando !== null}
+              onClick={() => enviar("bluetooth")}
+              data-testid="botao-imprimir-bluetooth"
+            >
+              {enviando === "bluetooth" ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <Bluetooth className="mr-1.5 size-4" />
+              )}
+              Impressora Bluetooth (ESC/POS)
+            </Button>
+
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              disabled={!suporte.usb || enviando !== null}
+              onClick={() => enviar("usb")}
+              data-testid="botao-imprimir-usb"
+            >
+              {enviando === "usb" ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <Usb className="mr-1.5 size-4" />
+              )}
+              Impressora USB (ESC/POS)
+            </Button>
+
+            <Button
+              className="w-full justify-start"
+              disabled={enviando !== null}
+              onClick={() => {
+                imprimirPeloSistema();
+                setEscolhendo(false);
+              }}
+              data-testid="botao-imprimir-sistema"
+            >
+              <Printer className="mr-1.5 size-4" /> Imprimir pelo sistema (58 mm)
+            </Button>
+
+            {(!suporte.bluetooth || !suporte.usb) && (
+              <p
+                className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground"
+                data-testid="aviso-suporte-impressao"
+              >
+                {!suporte.contextoSeguro
+                  ? "Bluetooth e USB exigem conexão segura (HTTPS)."
+                  : "Seu navegador não oferece " +
+                    [!suporte.bluetooth && "Bluetooth", !suporte.usb && "USB"]
+                      .filter(Boolean)
+                      .join(" nem ") +
+                    " para impressão direta. Use Chrome no Android ou no computador, ou imprima pelo sistema."}
+              </p>
+            )}
+
+            <Button
+              variant="ghost"
+              className="w-full"
+              disabled={enviando !== null}
+              onClick={() => setEscolhendo(false)}
+              data-testid="botao-voltar-impressao"
+            >
+              Voltar
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

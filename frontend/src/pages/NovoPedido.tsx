@@ -13,6 +13,7 @@ import { ErroAviso, Loading } from "@/components/Comuns";
 import { useAuth } from "@/context/AuthContext";
 import { apiGet, apiPost, mensagemErro } from "@/lib/api";
 import { brl, CATEGORIA_LABEL, type Mesa, type Pedido, type Produto } from "@/lib/types";
+import { iconePadraoCategoria, trocarPorPlaceholder } from "@/lib/iconesProdutos";
 
 interface LinhaCarrinho {
   produtoId: number;
@@ -180,7 +181,17 @@ export default function NovoPedido() {
                               className="flex flex-col rounded-lg border border-border p-3 text-left transition-colors duration-150 hover:border-primary hover:bg-accent/50 active:scale-95"
                               data-testid={`produto-adicionar-${p.id}`}
                             >
-                              <span className="font-heading text-sm font-bold">{p.nome}</span>
+                              <span className="mb-2 flex items-center gap-2">
+                                <img
+                                  src={p.imagemUrl || iconePadraoCategoria(p.categoria)}
+                                  onError={trocarPorPlaceholder}
+                                  alt={p.nome}
+                                  loading="lazy"
+                                  className="size-10 shrink-0 rounded-md border border-border object-cover"
+                                  data-testid={`cardapio-imagem-${p.id}`}
+                                />
+                                <span className="font-heading text-sm font-bold">{p.nome}</span>
+                              </span>
                               {p.descricao && (
                                 <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                                   {p.descricao}

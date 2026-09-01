@@ -11,6 +11,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { ErroAviso, Loading, VazioAviso } from "@/components/Comuns";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut, mensagemErro } from "@/lib/api";
 import { brl, CATEGORIA_LABEL, type Produto } from "@/lib/types";
+import {
+  ICONES_PRODUTOS,
+  iconePadraoCategoria,
+  trocarPorPlaceholder,
+} from "@/lib/iconesProdutos";
 
 const CATEGORIAS = ["caldo", "pastel", "bebida", "outro"];
 
@@ -139,6 +144,14 @@ export default function Produtos() {
                   className="flex flex-col rounded-xl border border-border bg-card p-4"
                   data-testid={`produto-card-${p.id}`}
                 >
+                  <img
+                    src={p.imagemUrl || iconePadraoCategoria(p.categoria)}
+                    onError={trocarPorPlaceholder}
+                    alt={p.nome}
+                    loading="lazy"
+                    className="mb-2 aspect-square w-full rounded-lg border border-border object-cover"
+                    data-testid={`produto-imagem-${p.id}`}
+                  />
                   <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                     {CATEGORIA_LABEL[p.categoria] ?? p.categoria}
                   </span>
@@ -254,26 +267,75 @@ export default function Produtos() {
                 </Select>
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="p-img">Imagem (URL)</Label>
+            <div className="space-y-2">
+              <Label>Imagem do produto</Label>
+              <div className="flex items-center gap-3">
+                <img
+                  src={form.imagemUrl || iconePadraoCategoria(form.categoria)}
+                  onError={trocarPorPlaceholder}
+                  alt="Pré-visualização"
+                  className="size-16 shrink-0 rounded-lg border border-border object-cover"
+                  data-testid="preview-imagem-produto"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Escolha um ícone da biblioteca ou informe o endereço (URL) de uma imagem. Sem
+                  imagem, o cardápio usa o ícone padrão da categoria.
+                </p>
+              </div>
+              <div
+                className="grid grid-cols-4 gap-2 sm:grid-cols-8"
+                data-testid="biblioteca-icones"
+              >
+                {ICONES_PRODUTOS.map((ic) => (
+                  <button
+                    key={ic.id}
+                    type="button"
+                    title={ic.nome}
+                    onClick={() => setForm({ ...form, imagemUrl: ic.url })}
+                    className={`overflow-hidden rounded-lg border-2 transition-colors duration-150 active:scale-95 ${
+                      form.imagemUrl === ic.url
+                        ? "border-primary"
+                        : "border-border hover:border-primary/60"
+                    }`}
+                    data-testid={`icone-${ic.id}`}
+                  >
+                    <img
+                      src={ic.url}
+                      alt={ic.nome}
+                      loading="lazy"
+                      className="aspect-square w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
                 <Input
                   id="p-img"
+                  placeholder="https://... (opcional)"
                   value={form.imagemUrl}
                   onChange={(e) => setForm({ ...form, imagemUrl: e.target.value })}
                   data-testid="input-produto-imagem"
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!form.imagemUrl}
+                  onClick={() => setForm({ ...form, imagemUrl: "" })}
+                  data-testid="botao-remover-imagem-produto"
+                >
+                  Remover
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="p-ordem">Ordem de exibição</Label>
-                <Input
-                  id="p-ordem"
-                  type="number"
-                  value={form.ordem}
-                  onChange={(e) => setForm({ ...form, ordem: e.target.value })}
-                  data-testid="input-produto-ordem"
-                />
-              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="p-ordem">Ordem de exibição</Label>
+              <Input
+                id="p-ordem"
+                type="number"
+                value={form.ordem}
+                onChange={(e) => setForm({ ...form, ordem: e.target.value })}
+                data-testid="input-produto-ordem"
+              />
             </div>
           </div>
           <DialogFooter>

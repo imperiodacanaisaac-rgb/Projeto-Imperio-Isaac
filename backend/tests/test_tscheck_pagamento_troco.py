@@ -42,10 +42,10 @@ def test_pagamento_troco_libera_mesa_e_lanca_caixa(client):
     assert pago["status"] == "PAGO", pago["status"]
     assert pago["pagamento"]["troco"] == round(recebido - total, 2)
 
-    # mesa liberada
+    # pagamento NAO libera a mesa (regra atual: liberacao e manual)
     mesas = client.get("/mesas", headers=headers_at).json()
     mesa_atual = next(m for m in mesas if m["id"] == mesa_id)
-    assert mesa_atual["status"] == "LIVRE", f"mesa não liberada: {mesa_atual}"
+    assert mesa_atual["status"] == "OCUPADA", f"mesa deveria continuar OCUPADA apos pagamento: {mesa_atual}"
 
     # entrada aparece no caixa (admin)
     movimentos = client.get("/caixa/movimentos", headers=headers_admin)

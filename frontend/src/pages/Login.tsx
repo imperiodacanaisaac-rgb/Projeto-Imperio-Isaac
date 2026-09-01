@@ -40,8 +40,14 @@ export default function Login() {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
       <div className="relative hidden flex-col justify-between overflow-hidden bg-[#064e3b] p-12 text-white lg:flex">
+        <img
+          src="/marca/login-hero.jpg"
+          alt="Caldo de cana e pastéis do Império Da Cana"
+          className="absolute inset-0 size-full object-cover opacity-45"
+          aria-hidden
+        />
         <div
-          className="absolute -right-24 top-1/4 size-96 rounded-full bg-[#16a34a]/40 blur-3xl"
+          className="absolute inset-0 bg-gradient-to-t from-[#064e3b] via-[#064e3b]/70 to-[#064e3b]/20"
           aria-hidden
         />
         <div
@@ -72,8 +78,19 @@ export default function Login() {
           data-testid="formulario-login"
         >
           <div className="space-y-1.5">
-            <span className="inline-flex size-11 items-center justify-center rounded-xl bg-[#16a34a] font-heading text-base font-extrabold text-white lg:hidden">
-              IC
+            <span className="mb-2 flex items-center gap-2 lg:hidden">
+              <img
+                src="/marca/caldo-cana.jpg"
+                alt=""
+                aria-hidden
+                className="size-11 rounded-xl border border-border object-cover"
+              />
+              <img
+                src="/marca/pastel.jpg"
+                alt=""
+                aria-hidden
+                className="size-11 rounded-xl border border-border object-cover"
+              />
             </span>
             <h1 className="font-heading text-2xl font-bold" data-testid="login-titulo">
               {nomeLoja}

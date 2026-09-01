@@ -41,6 +41,9 @@ export default function Perfil() {
 
   if (!user) return null;
 
+  // Atendentes não alteram os próprios dados de acesso (regra também aplicada na API).
+  const somenteLeitura = user.role === "ATENDENTE";
+
   return (
     <div className="max-w-2xl space-y-6" data-testid="pagina-perfil">
       <div>
@@ -63,19 +66,31 @@ export default function Perfil() {
             id="nome"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
+            disabled={somenteLeitura}
             data-testid="input-perfil-nome"
           />
         </div>
-        <Button
-          className="active:scale-95"
-          disabled={!nome.trim() || salvarNome.isPending}
-          onClick={() => salvarNome.mutate()}
-          data-testid="botao-salvar-perfil"
-        >
-          {salvarNome.isPending ? "Salvando..." : "Salvar nome"}
-        </Button>
+        {somenteLeitura ? (
+          <p
+            className="rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+            data-testid="aviso-perfil-somente-leitura"
+          >
+            Seus dados de acesso (nome, usuário e senha) são gerenciados pelo administrador.
+            Solicite a alteração a ele. Você pode apenas alternar o tema abaixo.
+          </p>
+        ) : (
+          <Button
+            className="active:scale-95"
+            disabled={!nome.trim() || salvarNome.isPending}
+            onClick={() => salvarNome.mutate()}
+            data-testid="botao-salvar-perfil"
+          >
+            {salvarNome.isPending ? "Salvando..." : "Salvar nome"}
+          </Button>
+        )}
       </section>
 
+      {!somenteLeitura && (
       <section className="space-y-4 rounded-xl border border-border bg-card p-5">
         <h2 className="font-heading text-lg font-bold">Alterar senha</h2>
         <div className="space-y-2">
@@ -125,6 +140,7 @@ export default function Perfil() {
           {trocarSenha.isPending ? "Alterando..." : "Alterar senha"}
         </Button>
       </section>
+      )}
 
       <section className="flex items-center justify-between rounded-xl border border-border bg-card p-5">
         <div>
