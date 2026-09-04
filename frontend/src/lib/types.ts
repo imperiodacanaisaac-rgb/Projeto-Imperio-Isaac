@@ -62,6 +62,7 @@ export interface Pagamento {
 export interface Pedido {
   id: number;
   numeroComanda: string;
+  diaComanda: string | null;
   clienteNome: string | null;
   mesaId: number | null;
   mesaNumero: number | null;
@@ -74,6 +75,18 @@ export interface Pedido {
   total: number;
   pagamento: Pagamento | null;
   criadoEm: string;
+}
+
+export interface ContaMesa {
+  mesaId: number;
+  mesaNumero: number;
+  status: StatusMesa;
+  qtdComandas: number;
+  comandas: string[];
+  pedidoIds: number[];
+  total: number;
+  pessoas: number;
+  valorPorPessoa: number;
 }
 
 export interface Comanda {

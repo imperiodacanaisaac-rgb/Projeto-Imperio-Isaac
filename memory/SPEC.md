@@ -71,7 +71,7 @@ Não há como contornar pela interface — a regra vive na API.
   - `PUT /api/produtos/{id}` usa `model_dump(exclude_unset=True)` (não `exclude_none`), para que
     `imagemUrl: null` / `descricao: null` sejam gravados e a remoção explícita funcione.
     Campos obrigatórios (nome, preco, categoria, ordem) são protegidos contra apagamento por null.
-- `pedidos`: id, numeroComanda (único), clienteNome, mesaId, atendenteId, status
+- `pedidos`: id, numeroComanda, **diaComanda** (YYYY-MM-DD), clienteNome, mesaId, atendenteId, status
   (ABERTO/PAGO/CANCELADO), observacao, canceladoMotivo, `itens[]` embutidos
   (produtoId, produtoNome, quantidade, **precoUnit congelado**, observacao),
   `pagamento` embutido (forma, valor, troco, pagoEm), criadoEm
@@ -82,18 +82,40 @@ Não há como contornar pela interface — a regra vive na API.
 - `contadores`: `_id` = nome da sequência (`usuarios`, `mesas`, `produtos`, `pedidos`,
   `caixa`, `logs`, `comanda`)
 
-Índices únicos: `usuarios.usuario`, `mesas.numero`, `pedidos.numeroComanda`.
+Índices únicos: `usuarios.usuario`, `mesas.numero`, `pedidos.(diaComanda, numeroComanda)`.
 
 ## Geração da comanda
 
 `routers/pedidos.py` → `gerar_numero_comanda()`:
 1. lê `mascaraComanda` (padrão `###`);
-2. incrementa atomicamente `db.contadores._id="comanda"` (`findOneAndUpdate $inc`);
+2. `_proximo_numero_do_dia()` incrementa `db.contadores._id="comanda"` de forma
+   atômica **e zera quando o dia virou** (campo `dia` comparado com
+   `lib.dates.today_iso()`, ancorado no servidor — `APP_TZ=America/Sao_Paulo`);
 3. conta `#` da máscara → `zfill`; substitui a sequência de `#`.
 Exemplos: `###`+7 → `007`; `P-###`+15 → `P-015`; `A###B`+42 → `A042B`.
-Índice único em `numeroComanda` é a segunda camada; se colidir, o contador avança.
-O contador **nunca** reseta automaticamente — só DEV via
-`PUT /api/configuracoes/resetar-contador-comanda` com `{ "confirmar": true }` (gera log).
+
+**A numeração reinicia em 001 no primeiro pedido de cada novo dia.** Cada pedido
+guarda `diaComanda` (YYYY-MM-DD) e o índice único é o par
+`(diaComanda, numeroComanda)` — então a comanda `001` de hoje e a `001` de ontem
+coexistem sem conflito. A comanda impressa mostra a data para não confundir o
+histórico. Se um número do dia já existir, o contador avança (segunda camada).
+O DEV ainda pode zerar manualmente via
+`PUT /api/configuracoes/resetar-contador-comanda` com `{ "confirmar": true }`.
+
+## Pedido editável e Conta da Mesa
+
+- `POST /api/pedidos/{id}/itens` — **soma** itens a uma comanda ABERTA sem criar
+  outro pedido. Itens iguais (mesmo produto e mesma observação) somam a quantidade;
+  o preço já congelado dos itens antigos é preservado e o novo item congela o preço
+  atual. Bloqueia com 400 se o pedido não estiver ABERTO. Log `ADICIONOU_ITENS`.
+  Na UI: `/pedidos` → Detalhes → "Adicionar itens".
+- `GET /api/mesas/{id}/conta?pessoas=N` — conta única da mesa: soma **todas** as
+  comandas ABERTAS, devolve os números das comandas, o total e o valor por pessoa.
+- `POST /api/mesas/{id}/pagamento` — paga todas as comandas abertas da mesa de uma
+  vez (`forma`, `valorRecebido` opcional, `pessoas` para registrar a divisão).
+  Cada comanda recebe seu próprio `pagamento` e sua própria ENTRADA no caixa, com
+  guarda atômica por comanda contra pagamento duplo. **Não libera a mesa.**
+  Log `PAGOU_CONTA_MESA`. Na UI: `/mesas` → toque na mesa → "Conta da mesa".
 
 ## Fluxos principais
 
@@ -142,12 +164,14 @@ agrupamento também vem em `grupos` no `GET /api/caixa/relatorio`.
 - `usuarios`: GET ``, GET `/{id}`, POST ``, PUT `/{id}`, PUT `/{id}/senha`,
   PUT `/{id}/tema`, PATCH `/{id}/status`, DELETE `/{id}`
 - `mesas`: GET ``, POST ``, PUT `/{id}`, PATCH `/{id}/status`,
+  **GET `/{id}/conta`**, **POST `/{id}/pagamento`** (conta única da mesa),
   **PATCH `/{id}/liberar`** (liberação manual), DELETE `/{id}`
 - `produtos`: GET `` (`?ativo=`, `?categoria=`), POST ``, PUT `/{id}`,
   PATCH `/{id}/status`, DELETE `/{id}`
 - `pedidos`: GET `` (`?status`, `?dataInicio`, `?dataFim`, `?numeroComanda`,
-  `?mesaId`, `?meus`), POST ``, GET `/{id}`, PUT `/{id}`, PATCH `/{id}/cancelar`,
-  POST `/{id}/pagamento`, GET `/{id}/comanda`
+  `?mesaId`, `?meus`), POST ``, GET `/{id}`, PUT `/{id}`,
+  **POST `/{id}/itens`** (somar itens à comanda aberta),
+  PATCH `/{id}/cancelar`, POST `/{id}/pagamento`, GET `/{id}/comanda`
 - `caixa`: GET `/resumo`, GET `/movimentos`, POST `/movimentos`, GET `/relatorio`,
   **GET `/vendas-categorias`** (Pastéis x Bebidas + filtro por grupo/produto)
 - `configuracoes`: GET `` (público), PUT `/{chave}` (DEV — inclui `limiteUsuarios`),
@@ -186,11 +210,16 @@ da categoria e `onError` cai no placeholder — imagem quebrada nunca estraga o 
 
 ## Identidade visual
 
-Poucas imagens, propositalmente: `login-hero.jpg` como fundo do painel esquerdo do
-login (com gradiente por cima para o formulário continuar legível), duas miniaturas
-(caldo + pastel) no topo do login em telas pequenas, e as miniaturas dos produtos no
-cardápio. Todas em `frontend/public/marca/` (~160 KB no total, 256px os ícones),
-com `loading="lazy"` nas miniaturas.
+Logo e cartaz do cliente em `frontend/public/marca/logo-full.jpg`, usados **no lugar
+do nome do estabelecimento** na tela de login (painel esquerdo no desktop, topo do
+formulário no mobile). O ícone `icone.png` (copo de caldo + pastéis, recortado do
+logo com o fundo verde removido) aparece na barra superior do app e como favicon
+(`public/favicon.png`, 64px) e apple-touch-icon (`icone-180.png`).
+A barra superior mostra também **a data do dia** (`topbar-data` no desktop,
+`data-hoje-mobile` no mobile).
+
+Miniaturas dos produtos no cardápio continuam vindo da biblioteca de ícones.
+Total de assets ~0,5 MB, com `loading="lazy"` nas miniaturas.
 
 ## Impressão de comanda (58 mm)
 

@@ -180,7 +180,10 @@ export default function Funcionarios({ modoDev = false }: { modoDev?: boolean })
       )}
 
       <Dialog open={nova} onOpenChange={setNova}>
-        <DialogContent data-testid="modal-novo-funcionario">
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto overscroll-contain"
+          data-testid="modal-novo-funcionario"
+        >
           <DialogHeader>
             <DialogTitle className="font-heading text-xl font-bold">Novo Funcionário</DialogTitle>
           </DialogHeader>

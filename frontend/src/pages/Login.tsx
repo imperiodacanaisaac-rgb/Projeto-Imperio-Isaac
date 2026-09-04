@@ -55,9 +55,12 @@ export default function Login() {
           aria-hidden
         />
         <div className="relative">
-          <span className="flex size-12 items-center justify-center rounded-xl bg-[#facc15] font-heading text-lg font-extrabold text-[#064e3b]">
-            IC
-          </span>
+          <img
+            src="/marca/logo-full.jpg"
+            alt="Império Da Cana"
+            className="w-full max-w-md rounded-xl shadow-2xl"
+            data-testid="login-logo"
+          />
         </div>
         <div className="relative max-w-md">
           <h2 className="font-heading text-4xl font-extrabold leading-tight">
@@ -78,23 +81,12 @@ export default function Login() {
           data-testid="formulario-login"
         >
           <div className="space-y-1.5">
-            <span className="mb-2 flex items-center gap-2 lg:hidden">
-              <img
-                src="/marca/caldo-cana.jpg"
-                alt=""
-                aria-hidden
-                className="size-11 rounded-xl border border-border object-cover"
-              />
-              <img
-                src="/marca/pastel.jpg"
-                alt=""
-                aria-hidden
-                className="size-11 rounded-xl border border-border object-cover"
-              />
-            </span>
-            <h1 className="font-heading text-2xl font-bold" data-testid="login-titulo">
-              {nomeLoja}
-            </h1>
+            <img
+              src="/marca/logo-full.jpg"
+              alt="Império Da Cana"
+              className="mb-3 w-full rounded-xl lg:hidden"
+              data-testid="login-logo-mobile"
+            />
             <p className="text-sm text-muted-foreground">Entre com seu usuário e senha.</p>
           </div>
 

@@ -11,14 +11,18 @@ import { ErroAviso, Loading, StatusBadge } from "@/components/Comuns";
 import { apiDelete, apiGet, apiPatch, apiPost, mensagemErro } from "@/lib/api";
 import {
   brl,
+  FORMA_LABEL,
   MESA_COR,
   MESA_LABEL,
+  type ContaMesa,
+  type FormaPagamento,
   type Mesa,
   type Pedido,
   type StatusMesa,
 } from "@/lib/types";
 
 const STATUS: StatusMesa[] = ["LIVRE", "OCUPADA", "RESERVADA", "MANUTENCAO"];
+const FORMAS: FormaPagamento[] = ["DINHEIRO", "PIX", "CREDITO", "DEBITO"];
 
 export default function Mesas() {
   const qc = useQueryClient();
@@ -26,6 +30,10 @@ export default function Mesas() {
   const [numero, setNumero] = useState("");
   const [capacidade, setCapacidade] = useState("");
   const [detalhe, setDetalhe] = useState<Mesa | null>(null);
+  const [pessoas, setPessoas] = useState("1");
+  const [pagandoConta, setPagandoConta] = useState(false);
+  const [forma, setForma] = useState<FormaPagamento>("DINHEIRO");
+  const [recebido, setRecebido] = useState("");
 
   const mesas = useQuery({ queryKey: ["mesas"], queryFn: () => apiGet<Mesa[]>("/mesas") });
 
@@ -35,9 +43,17 @@ export default function Mesas() {
     enabled: !!detalhe,
   });
 
+  const conta = useQuery({
+    queryKey: ["mesas", "conta", detalhe?.id, pessoas],
+    queryFn: () => apiGet<ContaMesa>(`/mesas/${detalhe?.id}/conta?pessoas=${Number(pessoas) || 1}`),
+    enabled: !!detalhe,
+  });
+
   const invalidar = () => {
     qc.invalidateQueries({ queryKey: ["mesas"] });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
+    qc.invalidateQueries({ queryKey: ["pedidos"] });
+    qc.invalidateQueries({ queryKey: ["caixa"] });
   };
 
   const criar = useMutation({
@@ -69,6 +85,25 @@ export default function Mesas() {
       toast.success("Mesa excluída");
       setDetalhe(null);
       invalidar();
+    },
+    onError: (e) => toast.error(mensagemErro(e)),
+  });
+
+  const pagarConta = useMutation({
+    mutationFn: () =>
+      apiPost<ContaMesa>(`/mesas/${detalhe?.id}/pagamento`, {
+        forma,
+        valorRecebido: forma === "DINHEIRO" && recebido ? Number(recebido) : null,
+        pessoas: Number(pessoas) || 1,
+      }),
+    onSuccess: (c) => {
+      toast.success(
+        `Conta da Mesa ${c.mesaNumero} paga — ${c.comandas.length} comanda(s), ${brl(c.total)}`,
+      );
+      setPagandoConta(false);
+      setRecebido("");
+      invalidar();
+      qc.invalidateQueries({ queryKey: ["mesas", "conta"] });
     },
     onError: (e) => toast.error(mensagemErro(e)),
   });
@@ -176,8 +211,11 @@ export default function Mesas() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!detalhe} onOpenChange={(v) => !v && setDetalhe(null)}>
-        <DialogContent data-testid="modal-detalhe-mesa">
+      <Dialog open={!!detalhe && !pagandoConta} onOpenChange={(v) => !v && setDetalhe(null)}>
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto overscroll-contain"
+          data-testid="modal-detalhe-mesa"
+        >
           <DialogHeader>
             <DialogTitle className="font-heading text-xl font-bold">
               Mesa {detalhe?.numero}
@@ -225,6 +263,60 @@ export default function Mesas() {
                 </ul>
               </div>
 
+              <div
+                className="rounded-lg border-2 border-primary/40 bg-primary/5 p-3"
+                data-testid="conta-mesa"
+              >
+                <p className="font-heading text-sm font-bold">Conta da mesa</p>
+                {conta.isLoading && <Loading texto="Somando comandas..." />}
+                {conta.data && (
+                  <>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {conta.data.qtdComandas === 0
+                        ? "Nenhuma comanda aberta para cobrar."
+                        : `${conta.data.qtdComandas} comanda(s) aberta(s): ${conta.data.comandas.join(", ")}`}
+                    </p>
+                    <p
+                      className="mt-2 font-heading text-3xl font-extrabold"
+                      data-testid="conta-total"
+                    >
+                      {brl(conta.data.total)}
+                    </p>
+
+                    {conta.data.qtdComandas > 0 && (
+                      <>
+                        <div className="mt-3 flex items-end gap-2">
+                          <div className="w-28 space-y-1.5">
+                            <Label htmlFor="pessoas">Dividir por</Label>
+                            <Input
+                              id="pessoas"
+                              type="number"
+                              min={1}
+                              value={pessoas}
+                              onChange={(e) => setPessoas(e.target.value)}
+                              data-testid="input-dividir-pessoas"
+                            />
+                          </div>
+                          <p className="pb-2 text-sm">
+                            <span className="text-muted-foreground">Cada pessoa: </span>
+                            <strong data-testid="conta-por-pessoa">
+                              {brl(conta.data.valorPorPessoa)}
+                            </strong>
+                          </p>
+                        </div>
+                        <Button
+                          className="mt-3 w-full active:scale-95"
+                          onClick={() => setPagandoConta(true)}
+                          data-testid="botao-pagar-conta-mesa"
+                        >
+                          Pagar conta da mesa
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+
               <div className="rounded-lg border border-border bg-muted/40 p-3">
                 <p className="text-xs text-muted-foreground">
                   O pagamento <strong>não libera</strong> a mesa: o cliente pode continuar sentado
@@ -261,6 +353,73 @@ export default function Mesas() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={pagandoConta} onOpenChange={(v) => !v && setPagandoConta(false)}>
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto overscroll-contain"
+          data-testid="modal-pagar-conta"
+        >
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl font-bold">
+              Conta da Mesa {detalhe?.numero} — {brl(conta.data?.total ?? 0)}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              {conta.data?.qtdComandas} comanda(s) serão marcadas como pagas de uma vez.
+              {Number(pessoas) > 1 &&
+                ` Dividido por ${pessoas} pessoas: ${brl(conta.data?.valorPorPessoa ?? 0)} cada.`}
+            </p>
+            <div className="space-y-2">
+              <Label>Forma de pagamento</Label>
+              <Select value={forma} onValueChange={(v: string) => setForma(v as FormaPagamento)}>
+                <SelectTrigger data-testid="select-forma-conta">
+                  <SelectValue>{(v) => FORMA_LABEL[v as FormaPagamento]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {FORMAS.map((f) => (
+                    <SelectItem key={f} value={f} data-testid={`opcao-conta-forma-${f.toLowerCase()}`}>
+                      {FORMA_LABEL[f]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {forma === "DINHEIRO" && (
+              <div className="space-y-2">
+                <Label htmlFor="conta-recebido">Valor recebido</Label>
+                <Input
+                  id="conta-recebido"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  value={recebido}
+                  onChange={(e) => setRecebido(e.target.value)}
+                  placeholder={String(conta.data?.total ?? 0)}
+                  data-testid="input-conta-recebido"
+                />
+                <p className="text-sm font-semibold text-primary" data-testid="conta-troco">
+                  Troco:{" "}
+                  {brl(
+                    Math.max(0, (Number(recebido) || 0) - (conta.data?.total ?? 0)),
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPagandoConta(false)}>
+              Voltar
+            </Button>
+            <Button
+              disabled={pagarConta.isPending}
+              onClick={() => pagarConta.mutate()}
+              data-testid="botao-confirmar-conta"
+            >
+              {pagarConta.isPending ? "Pagando..." : "Confirmar pagamento"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

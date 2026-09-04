@@ -85,6 +85,26 @@ class MesaStatusUpdate(BaseModel):
     status: StatusMesa
 
 
+class ContaMesa(BaseModel):
+    """Conta única da mesa: soma de todas as comandas ABERTAS."""
+
+    mesaId: int
+    mesaNumero: int
+    status: StatusMesa
+    qtdComandas: int
+    comandas: list[str]
+    pedidoIds: list[int]
+    total: float
+    pessoas: int = 1
+    valorPorPessoa: float
+
+
+class ContaPagamentoIn(BaseModel):
+    forma: FormaPagamento
+    valorRecebido: Optional[float] = None
+    pessoas: int = Field(default=1, ge=1)
+
+
 # ---------- produtos ----------
 class Produto(BaseModel):
     id: int
@@ -152,9 +172,16 @@ class Pagamento(BaseModel):
     pagoEm: datetime
 
 
+class ItensAdd(BaseModel):
+    """Soma itens a uma comanda já aberta, sem criar outro pedido."""
+
+    itens: list[ItemIn] = Field(min_length=1)
+
+
 class Pedido(BaseModel):
     id: int
     numeroComanda: str
+    diaComanda: Optional[str] = None
     clienteNome: Optional[str] = None
     mesaId: Optional[int] = None
     mesaNumero: Optional[int] = None

@@ -209,7 +209,10 @@ export default function Produtos() {
       )}
 
       <Dialog open={aberto} onOpenChange={setAberto}>
-        <DialogContent data-testid="modal-produto">
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto overscroll-contain"
+          data-testid="modal-produto"
+        >
           <DialogHeader>
             <DialogTitle className="font-heading text-xl font-bold">
               {editando ? "Editar Produto" : "Novo Produto"}

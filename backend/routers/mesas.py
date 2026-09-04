@@ -4,7 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from lib.auth import limpo, next_seq, permitir, registrar_log, usuario_atual
 from lib.db import db
-from models.schemas import Mesa, MesaCreate, MesaStatusUpdate, MesaUpdate
+from models.schemas import (
+    ContaMesa,
+    ContaPagamentoIn,
+    Mesa,
+    MesaCreate,
+    MesaStatusUpdate,
+    MesaUpdate,
+)
 
 router = APIRouter(prefix="/mesas", tags=["mesas"])
 
@@ -70,6 +77,111 @@ async def mudar_status(mid: int, body: MesaStatusUpdate, _user: dict = Depends(u
         )
     await db.mesas.update_one({"id": mid}, {"$set": {"status": body.status}})
     return Mesa(**await _buscar(mid))
+
+
+@router.get("/{mid}/conta", response_model=ContaMesa)
+async def conta(mid: int, pessoas: int = 1, _user: dict = Depends(usuario_atual)):
+    """Conta única da mesa: soma todas as comandas ABERTAS, com divisão opcional."""
+    mesa = await _buscar(mid)
+    abertos = await db.pedidos.find({"mesaId": mid, "status": "ABERTO"}).sort("criadoEm", 1).to_list(200)
+    total = round(
+        sum(i["quantidade"] * i["precoUnit"] for p in abertos for i in p.get("itens", [])), 2
+    )
+    n = max(1, pessoas)
+    return ContaMesa(
+        mesaId=mesa["id"],
+        mesaNumero=mesa["numero"],
+        status=mesa["status"],
+        qtdComandas=len(abertos),
+        comandas=[p["numeroComanda"] for p in abertos],
+        pedidoIds=[p["id"] for p in abertos],
+        total=total,
+        pessoas=n,
+        valorPorPessoa=round(total / n, 2),
+    )
+
+
+@router.post("/{mid}/pagamento", response_model=ContaMesa)
+async def pagar_conta(mid: int, body: ContaPagamentoIn, user: dict = Depends(usuario_atual)):
+    """Paga de uma vez todas as comandas abertas da mesa.
+    A mesa NÃO é liberada aqui — a liberação continua manual."""
+    mesa = await _buscar(mid)
+    abertos = await db.pedidos.find({"mesaId": mid, "status": "ABERTO"}).to_list(200)
+    if not abertos:
+        raise HTTPException(
+            status_code=400, detail="Esta mesa não possui comandas abertas para pagar"
+        )
+
+    total = round(
+        sum(i["quantidade"] * i["precoUnit"] for p in abertos for i in p.get("itens", [])), 2
+    )
+    troco = None
+    if body.forma == "DINHEIRO":
+        recebido = body.valorRecebido if body.valorRecebido is not None else total
+        if recebido < total:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Valor recebido é menor que o total da conta (R$ {total:.2f})",
+            )
+        troco = round(recebido - total, 2)
+
+    agora = datetime.now(timezone.utc)
+    pagos: list[str] = []
+    for p in abertos:
+        subtotal = round(sum(i["quantidade"] * i["precoUnit"] for i in p.get("itens", [])), 2)
+        # Guarda atômica por comanda, contra pagamento duplo simultâneo.
+        atualizado = await db.pedidos.find_one_and_update(
+            {"id": p["id"], "status": "ABERTO"},
+            {
+                "$set": {
+                    "status": "PAGO",
+                    "pagamento": {
+                        "forma": body.forma,
+                        "valor": subtotal,
+                        "troco": None,
+                        "pagoEm": agora,
+                    },
+                }
+            },
+        )
+        if not atualizado:
+            continue
+        pagos.append(p["numeroComanda"])
+        await db.caixa.insert_one(
+            {
+                "id": await next_seq("caixa"),
+                "tipo": "ENTRADA",
+                "valor": subtotal,
+                "descricao": f"Venda comanda {p['numeroComanda']} ({body.forma}) — conta da Mesa {mesa['numero']}",
+                "categoria": "venda",
+                "usuarioId": user["id"],
+                "criadoEm": agora,
+            }
+        )
+
+    if not pagos:
+        raise HTTPException(
+            status_code=400, detail="Esta conta já foi paga por outro usuário"
+        )
+
+    detalhe = f"Mesa {mesa['numero']} — {len(pagos)} comanda(s), R$ {total:.2f} via {body.forma}"
+    if body.pessoas > 1:
+        detalhe += f" — dividido por {body.pessoas} pessoas"
+    if troco:
+        detalhe += f" — troco R$ {troco:.2f}"
+    await registrar_log(user["id"], "PAGOU_CONTA_MESA", detalhe)
+
+    return ContaMesa(
+        mesaId=mesa["id"],
+        mesaNumero=mesa["numero"],
+        status=mesa["status"],
+        qtdComandas=0,
+        comandas=pagos,
+        pedidoIds=[],
+        total=total,
+        pessoas=body.pessoas,
+        valorPorPessoa=round(total / max(1, body.pessoas), 2),
+    )
 
 
 @router.patch("/{mid}/liberar", response_model=Mesa)

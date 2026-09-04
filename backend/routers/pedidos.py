@@ -4,12 +4,14 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from lib.auth import limpo, next_seq, registrar_log, usuario_atual
+from lib.dates import today_iso
 from lib.db import db
 from models.schemas import (
     CancelarIn,
     Comanda,
     ItemIn,
     ItemPedido,
+    ItensAdd,
     Pagamento,
     PagamentoIn,
     Pedido,
@@ -45,13 +47,36 @@ def aplicar_mascara(mascara: str, numero: int) -> str:
     return saida
 
 
+async def _proximo_numero_do_dia() -> int:
+    """Incrementa o contador de comandas, zerando-o quando o dia virou.
+    O dia é ancorado no servidor (lib/dates.today_iso), nunca no navegador."""
+    hoje = today_iso()
+    doc = await db.contadores.find_one_and_update(
+        {"_id": "comanda", "dia": hoje},
+        {"$inc": {"valor": 1}},
+        return_document=True,
+    )
+    if doc:
+        return int(doc["valor"])
+    # Primeiro pedido do dia (ou primeira execução): reinicia a numeração em 1.
+    doc = await db.contadores.find_one_and_update(
+        {"_id": "comanda"},
+        {"$set": {"dia": hoje, "valor": 1}},
+        upsert=True,
+        return_document=True,
+    )
+    return int(doc["valor"])
+
+
 async def gerar_numero_comanda() -> str:
     mascara = await config_valor("mascaraComanda", "###")
     for _ in range(10):
-        numero = await next_seq("comanda")
+        numero = await _proximo_numero_do_dia()
         candidato = aplicar_mascara(mascara, numero)
-        # UNIQUE como segunda camada: se já existe, avança o contador.
-        if not await db.pedidos.find_one({"numeroComanda": candidato}):
+        # UNIQUE é por dia: comandas de dias anteriores podem repetir o número.
+        if not await db.pedidos.find_one(
+            {"numeroComanda": candidato, "diaComanda": today_iso()}
+        ):
             return candidato
     raise HTTPException(status_code=500, detail="Não foi possível gerar o número da comanda")
 
@@ -59,7 +84,8 @@ async def gerar_numero_comanda() -> str:
 async def proxima_comanda_preview() -> str:
     mascara = await config_valor("mascaraComanda", "###")
     doc = await db.contadores.find_one({"_id": "comanda"})
-    atual = int(doc["valor"]) if doc else 0
+    # Se o dia virou, a próxima comanda volta a ser a número 1.
+    atual = int(doc["valor"]) if doc and doc.get("dia") == today_iso() else 0
     return aplicar_mascara(mascara, atual + 1)
 
 
@@ -107,6 +133,7 @@ async def montar(doc: dict) -> Pedido:
     return Pedido(
         id=doc["id"],
         numeroComanda=doc["numeroComanda"],
+        diaComanda=doc.get("diaComanda"),
         clienteNome=doc.get("clienteNome"),
         mesaId=doc.get("mesaId"),
         mesaNumero=mesa_numero,
@@ -192,6 +219,7 @@ async def criar(body: PedidoCreate, user: dict = Depends(usuario_atual)):
         "canceladoMotivo": None,
         "itens": itens,
         "pagamento": None,
+        "diaComanda": today_iso(),
         "criadoEm": datetime.now(timezone.utc),
     }
     await db.pedidos.insert_one(doc)
@@ -225,6 +253,40 @@ async def editar(pid: int, body: PedidoUpdate, user: dict = Depends(usuario_atua
         },
     )
     await registrar_log(user["id"], "EDITOU_PEDIDO", f"Comanda {doc['numeroComanda']}")
+    return await montar(await _buscar(pid))
+
+
+@router.post("/{pid}/itens", response_model=Pedido)
+async def adicionar_itens(pid: int, body: ItensAdd, user: dict = Depends(usuario_atual)):
+    """Soma itens a uma comanda ABERTA, sem precisar criar outro pedido.
+    Itens repetidos somam a quantidade; o preço já congelado é preservado."""
+    doc = await _buscar(pid)
+    if doc["status"] != "ABERTO":
+        raise HTTPException(status_code=400, detail="Este pedido já foi finalizado")
+
+    novos = await _resolver_itens(body.itens)
+    atuais = list(doc.get("itens", []))
+    for novo in novos:
+        existente = next(
+            (
+                i
+                for i in atuais
+                if i["produtoId"] == novo["produtoId"]
+                and (i.get("observacao") or None) == (novo.get("observacao") or None)
+            ),
+            None,
+        )
+        if existente:
+            existente["quantidade"] += novo["quantidade"]
+        else:
+            atuais.append(novo)
+
+    await db.pedidos.update_one({"id": pid}, {"$set": {"itens": atuais}})
+    await registrar_log(
+        user["id"],
+        "ADICIONOU_ITENS",
+        f"Comanda {doc['numeroComanda']} — +{sum(i['quantidade'] for i in novos)} item(ns)",
+    )
     return await montar(await _buscar(pid))
 
 

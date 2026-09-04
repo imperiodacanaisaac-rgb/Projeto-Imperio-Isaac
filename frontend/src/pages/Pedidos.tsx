@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,8 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ComandaModal } from "@/components/ComandaModal";
 import { ErroAviso, Loading, StatusBadge, VazioAviso } from "@/components/Comuns";
 import { useAuth } from "@/context/AuthContext";
-import { apiGet, apiPatch, apiPost, mensagemErro } from "@/lib/api";
-import { brl, dataHora, FORMA_LABEL, type FormaPagamento, type Pedido } from "@/lib/types";
+import { apiGet, apiPatch, apiPost, mensagemErro } from "@/lib/api";import { brl, dataHora, FORMA_LABEL, type FormaPagamento, type Pedido, type Produto } from "@/lib/types";
 
 const FORMAS: FormaPagamento[] = ["DINHEIRO", "PIX", "CREDITO", "DEBITO"];
 const STATUS_FILTRO = ["TODOS", "ABERTO", "PAGO", "CANCELADO"];
@@ -35,6 +35,8 @@ export default function Pedidos() {
   const [detalhe, setDetalhe] = useState<Pedido | null>(null);
   const [pagando, setPagando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
+  const [adicionando, setAdicionando] = useState(false);
+  const [extras, setExtras] = useState<Record<number, number>>({});
   const [comanda, setComanda] = useState<Pedido | null>(null);
   const [forma, setForma] = useState<FormaPagamento>("DINHEIRO");
   const [recebido, setRecebido] = useState("");
@@ -87,6 +89,34 @@ export default function Pedidos() {
       toast.success("Pedido cancelado");
       setCancelando(false);
       setMotivo("");
+      setDetalhe(p);
+      invalidar();
+    },
+    onError: (e) => toast.error(mensagemErro(e)),
+  });
+
+  const produtosAtivos = useQuery({
+    queryKey: ["produtos", "ativos"],
+    queryFn: () => apiGet<Produto[]>("/produtos?ativo=true"),
+    enabled: adicionando,
+  });
+
+  const totalExtras = Object.entries(extras).reduce((s, [id, qtd]) => {
+    const prod = produtosAtivos.data?.find((p) => p.id === Number(id));
+    return s + (prod ? prod.preco * qtd : 0);
+  }, 0);
+
+  const adicionarItens = useMutation({
+    mutationFn: () =>
+      apiPost<Pedido>(`/pedidos/${detalhe?.id}/itens`, {
+        itens: Object.entries(extras)
+          .filter(([, qtd]) => qtd > 0)
+          .map(([id, qtd]) => ({ produtoId: Number(id), quantidade: qtd })),
+      }),
+    onSuccess: (p) => {
+      toast.success(`Itens somados à comanda ${p.numeroComanda}`);
+      setAdicionando(false);
+      setExtras({});
       setDetalhe(p);
       invalidar();
     },
@@ -258,8 +288,11 @@ export default function Pedidos() {
         </>
       )}
 
-      <Dialog open={!!detalhe && !pagando && !cancelando} onOpenChange={(v) => !v && setDetalhe(null)}>
-        <DialogContent data-testid="modal-detalhe-pedido">
+      <Dialog open={!!detalhe && !pagando && !cancelando && !adicionando} onOpenChange={(v) => !v && setDetalhe(null)}>
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto overscroll-contain"
+          data-testid="modal-detalhe-pedido"
+        >
           <DialogHeader>
             <DialogTitle className="font-heading text-xl font-bold">
               Comanda {detalhe?.numeroComanda}
@@ -310,6 +343,13 @@ export default function Pedidos() {
                       data-testid="botao-confirmar-pagamento"
                     >
                       Confirmar Pagamento
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setAdicionando(true)}
+                      data-testid="botao-adicionar-itens"
+                    >
+                      <Plus className="mr-1.5 size-4" /> Adicionar itens
                     </Button>
                     <Button
                       variant="destructive"
@@ -416,6 +456,93 @@ export default function Pedidos() {
               data-testid="botao-confirmar-cancelamento"
             >
               {cancelar.isPending ? "Cancelando..." : "Confirmar cancelamento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={adicionando} onOpenChange={(v) => !v && setAdicionando(false)}>
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto overscroll-contain"
+          data-testid="modal-adicionar-itens"
+        >
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl font-bold">
+              Somar itens à comanda {detalhe?.numeroComanda}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Os itens são somados à comanda já aberta — não é criado outro pedido.
+            </p>
+            {produtosAtivos.isLoading && <Loading />}
+            {produtosAtivos.data?.length === 0 && (
+              <VazioAviso texto="Nenhum produto ativo no cardápio." />
+            )}
+            <ul className="divide-y divide-border">
+              {produtosAtivos.data?.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-3 py-2.5"
+                  data-testid={`extra-produto-${p.id}`}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{p.nome}</span>
+                    <span className="text-xs text-muted-foreground">{brl(p.preco)}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <Button
+                      size="icon-xs"
+                      variant="outline"
+                      disabled={!extras[p.id]}
+                      onClick={() =>
+                        setExtras((a) => ({ ...a, [p.id]: Math.max(0, (a[p.id] ?? 0) - 1) }))
+                      }
+                      data-testid={`extra-menos-${p.id}`}
+                    >
+                      <Minus className="size-3" />
+                    </Button>
+                    <span
+                      className="w-6 text-center font-mono text-sm font-bold"
+                      data-testid={`extra-qtd-${p.id}`}
+                    >
+                      {extras[p.id] ?? 0}
+                    </span>
+                    <Button
+                      size="icon-xs"
+                      variant="outline"
+                      onClick={() => setExtras((a) => ({ ...a, [p.id]: (a[p.id] ?? 0) + 1 }))}
+                      data-testid={`extra-mais-${p.id}`}
+                    >
+                      <Plus className="size-3" />
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex items-center justify-between border-t border-border pt-3">
+              <span className="text-sm font-semibold text-muted-foreground">A somar</span>
+              <span className="font-heading text-xl font-extrabold" data-testid="extras-total">
+                {brl(totalExtras)}
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAdicionando(false);
+                setExtras({});
+              }}
+            >
+              Voltar
+            </Button>
+            <Button
+              disabled={totalExtras <= 0 || adicionarItens.isPending}
+              onClick={() => adicionarItens.mutate()}
+              data-testid="botao-confirmar-adicionar-itens"
+            >
+              {adicionarItens.isPending ? "Somando..." : "Somar à comanda"}
             </Button>
           </DialogFooter>
         </DialogContent>

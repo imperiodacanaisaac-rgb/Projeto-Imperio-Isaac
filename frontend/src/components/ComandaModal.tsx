@@ -68,7 +68,10 @@ export function ComandaModal({
 
   return (
     <Dialog open={aberto} onOpenChange={(v) => !v && onFechar()}>
-      <DialogContent className="sm:max-w-sm" data-testid="comanda-modal">
+      <DialogContent
+        className="max-h-[90dvh] overflow-y-auto overscroll-contain sm:max-w-sm"
+        data-testid="comanda-modal"
+      >
         <DialogHeader className="no-print">
           <DialogTitle className="font-heading text-xl font-bold">
             Comanda {pedido.numeroComanda}
@@ -83,6 +86,9 @@ export function ComandaModal({
           <p className="mt-1 text-center text-[11px]">Caldo de cana &amp; pastel</p>
           <p className="my-2 border-y border-dashed border-[#a8a29e] py-1 text-center text-base font-bold">
             COMANDA {pedido.numeroComanda}
+            <span className="block text-[11px] font-semibold">
+              {new Date(pedido.criadoEm).toLocaleDateString("pt-BR")}
+            </span>
           </p>
           <p>Cliente: {pedido.clienteNome || "Não informado"}</p>
           <p>Mesa: {pedido.mesaNumero ? `Mesa ${pedido.mesaNumero}` : "Balcão"}</p>

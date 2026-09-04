@@ -1,0 +1,129 @@
+{
+  "iteration": 3,
+  "mode": "retest",
+  "summary": "Reused the 2 previously-passing browser checks and 7 backend test files (all still PASS), fixed one confirmed environment-drift issue (config mascaraComanda left as 'TSCHECK-###' by a prior test run, causing test_tscheck_comanda_virada_dia to fail; restored to '###'), then authored and PASSED the 5 remaining UI browser checks required by the acceptance matrix.",
+  "passed": 14,
+  "failed": 0,
+  "flaky": 0,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "API — Pedido editável: somar itens à comanda aberta (backend)",
+      "name": "test_tscheck_pedido_itens_soma.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /pedidos 201 -> PATCH /pedidos/{id}/itens somando o mesmo produtoId 201: total soma corretamente e a linha do item é mesclada (quantidade acumulada), sem novo pedido criado. Rerun: 'q' pytest, 11 passed in 2.91s (arquivo incluso)."
+    },
+    {
+      "criterion": "UI — Pedido editável: somar itens à comanda aberta pela tela",
+      "name": "pedido-adicionar-itens-soma-mesma-comanda",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Criado produto tscheck-soma-<ts> (R$10,00) como ADMIN, pedido balcão -> comanda X, detalhe-total=R$10,00 (1 linha). Em 'Adicionar itens', extra-mais clicado 2x -> extra-qtd=2, extras-total=R$20,00. Após confirmar: mesma comanda X, detalhe-total=R$30,00, número de linhas de item inalterado (mesclou quantidade), linha-pedido-X ainda única na lista de /pedidos."
+    },
+    {
+      "criterion": "API — Conta da Mesa: soma, divisão e pagamento único (backend)",
+      "name": "test_tscheck_conta_da_mesa.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "2 pedidos ABERTOS na mesma mesa -> GET conta soma total; POST pagar-conta com 2 comandas marca ambas como PAGO; teste adicional confirma liberar mesa bloqueado enquanto há pedido ABERTO. 2 testes passed."
+    },
+    {
+      "criterion": "UI — Conta da Mesa: soma, divisão e pagamento único",
+      "name": "conta-mesa-soma-divide-paga-unico",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Mesa própria com comandas A (R$10) e B (R$20): conta-mesa lista as 2 comandas, conta-total=R$30,00. input-dividir-pessoas=3 -> conta-por-pessoa=R$10,00. Pagar conta: recebido R$50 -> conta-troco=R$20,00; após confirmar, linha-pedido de A e B mostram 'Pago' em /pedidos."
+    },
+    {
+      "criterion": "UI — Mesa permanece ocupada após pagar a conta e é liberada manualmente",
+      "name": "pagamento-calcula-troco-libera-mesa-caixa",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Reescrito para criar produto próprio (R$9,00) em vez de depender de id de produto semeado (residual quebrado). Após pagamento individual do pedido, mesa-card ainda contém 'Ocupada'. Clicar 'Liberar mesa' torna o botão 'Mesa já está livre' e o card deixa de conter 'Ocupada'. Histórico do pedido continua em /pedidos e no Caixa (admin)."
+    },
+    {
+      "criterion": "API — Numeração/virada de dia da comanda (backend)",
+      "name": "test_tscheck_comanda_virada_dia.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /comanda/proxima e POST /pedidos confirmam reinício em '001' após simular virada de dia (contador.dia movido); pedido novo recebe diaComanda=hoje convivendo sem duplicidade com o '001' do dia anterior. Restauração defensiva no finally verificada. 2 testes do arquivo passed (após restaurar config mascaraComanda que estava em drift — ver action_items)."
+    },
+    {
+      "criterion": "UI — Comanda mostra a data e a numeração começa em 001",
+      "name": "comanda-mostra-numero-e-data",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Pedido criado como ADMIN: modal da comanda recém-fechada exibe COMANDA <num> e a data de hoje em dd/mm/aaaa dentro de comanda-conteudo. Reaberta via botao-ver-comanda a partir do detalhe do pedido: mesmo número, mesma data, comanda-total=R$5,00. (Asserção de '001' exato coberta pelo teste de backend, pois o dia já tinha comandas de execuções anteriores no ambiente compartilhado.)"
+    },
+    {
+      "criterion": "UI — Identidade visual e data no topo do app",
+      "name": "identidade-visual-logo-topbar-data",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Desktop 1280x900: login-logo e ícone dentro de topbar-logo carregam (naturalWidth>0); topbar-data mostra dd/mm/aaaa de hoje; /favicon.png = 200; sem scroll horizontal; sem <img> quebrada. Mobile 390x844: login-logo-mobile carrega; data-hoje-mobile mostra a mesma data; sem scroll horizontal; sem imagem quebrada."
+    },
+    {
+      "criterion": "Regressão — Botão Salvar do produto acessível no mobile (bug reportado, já corrigido)",
+      "name": "produto-mobile-salvar-scroll-cria-edita",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Rerun by name (mode reran-persisted): criação e edição de produto no mobile com botão Salvar visível/alcançável via scroll; produto criado aparece na grade e edição persiste."
+    },
+    {
+      "criterion": "Regressão — Modais mobile: ação principal sempre acessível com scroll",
+      "name": "modais-mobile-scroll-acao-acessivel",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Rerun by name: modais de detalhe de mesa (Liberar), detalhe de pedido (Cancelar) e novo funcionário (Salvar) mantêm o botão de ação alcançável via scroll no mobile."
+    },
+    {
+      "criterion": "Regressão — Limite de usuários (backend)",
+      "name": "test_tscheck_limite_usuarios.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "ADMIN bloqueado (400) ao tentar criar usuário acima do limiteUsuarios; DEV consegue ajustar o limite e restaura para '5' ao final."
+    },
+    {
+      "criterion": "Regressão — Mesa duplicada bloqueada (backend)",
+      "name": "test_tscheck_mesa_duplicada.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /mesas com número já existente retorna 400; criação de mesa nova com número livre retorna 201."
+    },
+    {
+      "criterion": "Regressão — Perfil do atendente somente leitura (backend)",
+      "name": "test_tscheck_perfil_atendente_readonly.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "PUT em nome/login/senha do próprio atendente retorna 403; alteração de tema permitida."
+    },
+    {
+      "criterion": "Regressão — Permissões de usuários por role (backend)",
+      "name": "test_tscheck_permissoes_usuarios.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "ADMIN não consegue criar usuário ADMIN (403/400 conforme regra) e ATENDENTE recebe 403/404 em rotas administrativas de usuários."
+    }
+  ],
+  "bugs": [],
+  "action_items": [
+    {
+      "severity": "medium",
+      "type": "environment_drift_fixed",
+      "description": "A config 'mascaraComanda' estava persistida como 'TSCHECK-###' (em vez do valor semeado '###'), resíduo deixado por uma execução anterior do check 'dev-mascara-comanda-preview-e-tema-persiste' que não restaurou o valor original. Isso fazia test_tscheck_comanda_virada_dia.py falhar (número de comanda virava 'TSCHECK-003' em vez de '001'). Corrigido diretamente no Mongo (voltado para '###') nesta sessão — não é bug de aplicação, é resíduo de teste. Recomenda-se revisar o check 'dev-mascara-comanda-preview-e-tema-persiste' para garantir que ele restaure a máscara original no final (não foi re-autorado nesta sessão por estar fora do escopo do briefing atual)."
+    },
+    {
+      "severity": "low",
+      "type": "rate_limit",
+      "description": "Rodar múltiplos browser checks em paralelo (cada um faz login) esgotou o limite de 10 tentativas/15min por IP (429). Contornado reiniciando o backend (supervisorctl restart) e rodando os checks sequencialmente, como orientado no briefing."
+    },
+    {
+      "severity": "note",
+      "type": "note",
+      "description": "O check antigo 'pagamento-calcula-troco-libera-mesa-caixa' dependia de um produto semeado fixo (id=2) que não existe mais no banco zerado, e sua asserção original dizia que o pagamento LIBERAVA a mesa — o que contradiz a regra de negócio atual (liberação é manual). Foi reescrito nesta sessão (produto próprio + asserção corrigida para 'mesa permanece ocupada até liberação manual'), cobrindo diretamente o critério 3 da matriz."
+    }
+  ]
+}

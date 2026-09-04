@@ -137,6 +137,7 @@ export function montarTextoComanda(d: DadosComanda): string {
   l.push(centralizar("Caldo de cana & pastel"));
   l.push(sep);
   l.push(centralizar(`COMANDA ${d.numeroComanda}`));
+  l.push(centralizar(new Date(d.criadoEm).toLocaleDateString("pt-BR")));
   l.push(sep);
   l.push(`Cliente: ${d.clienteNome || "Nao informado"}`);
   l.push(`Mesa...: ${d.mesaNumero ? `Mesa ${d.mesaNumero}` : "Balcao"}`);

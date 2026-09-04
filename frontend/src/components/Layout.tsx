@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   BarChart3,
+  CalendarDays,
   ClipboardList,
   CircleDollarSign,
   HelpCircle,
@@ -57,6 +58,14 @@ export default function Layout() {
   const nomeLoja = config.nomeEstabelecimento || "Império Da Cana";
   const itens = ITENS.filter((i) => (user ? i.roles.includes(user.role) : false));
 
+  // Data do dia exibida na barra superior.
+  const dataDeHoje = new Date().toLocaleDateString("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <header
@@ -73,9 +82,12 @@ export default function Layout() {
         </button>
 
         <Link to="/" className="flex min-w-0 items-center gap-2" data-testid="topbar-logo">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#16a34a] font-heading text-sm font-extrabold text-white">
-            IC
-          </span>
+          <img
+            src="/marca/icone.png"
+            alt=""
+            aria-hidden
+            className="size-9 shrink-0 object-contain"
+          />
           <span
             className="truncate font-heading text-base font-bold sm:text-lg"
             data-testid="topbar-estabelecimento"
@@ -83,6 +95,14 @@ export default function Layout() {
             {nomeLoja}
           </span>
         </Link>
+
+        <span
+          className="ml-2 hidden shrink-0 items-center gap-1.5 rounded-lg border border-border bg-muted/50 px-2.5 py-1.5 text-xs font-semibold sm:flex"
+          data-testid="topbar-data"
+        >
+          <CalendarDays className="size-3.5 text-primary" />
+          {dataDeHoje}
+        </span>
 
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden items-center gap-2 sm:flex">
@@ -160,6 +180,13 @@ export default function Layout() {
         )}
 
         <main className="min-w-0 flex-1 p-4 sm:p-6" data-testid="conteudo-principal">
+          <p
+            className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground sm:hidden"
+            data-testid="data-hoje-mobile"
+          >
+            <CalendarDays className="size-3.5 text-primary" />
+            {dataDeHoje}
+          </p>
           <Outlet />
         </main>
       </div>

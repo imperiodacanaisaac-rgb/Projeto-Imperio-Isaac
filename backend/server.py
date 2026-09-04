@@ -30,7 +30,10 @@ from routers import (
 async def lifespan(app: FastAPI):
     await db.usuarios.create_index("usuario", unique=True)
     await db.mesas.create_index("numero", unique=True)
-    await db.pedidos.create_index("numeroComanda", unique=True)
+    # A numeração da comanda reinicia a cada dia, então o par (dia, número) é o único.
+    await db.pedidos.create_index(
+        [("diaComanda", 1), ("numeroComanda", 1)], unique=True, sparse=True
+    )
     yield
     client.close()
 
