@@ -1,0 +1,61 @@
+{
+  "iteration": 4,
+  "mode": "retest",
+  "summary": "Re-ran the 11 existing backend tests (all PASS, no drift), and authored 4 new browser checks validating the Bluetooth GATT reconnect fix in impressao.ts (imprimirBluetooth) via injected navigator.bluetooth mocks plus one no-mock regression check on the real ambient (mobile 390x844). All 4 new checks PASSED. Existing checks from iteration 3 were left untouched (not re-run, since the briefing's matrix concerns only the printing fix; re-running the full historical suite was out of scope for this focused retest and no code outside impressao.ts / ComandaModal.tsx changed).",
+  "passed": 15,
+  "failed": 0,
+  "flaky": 0,
+  "blocked": 0,
+  "test_error": 0,
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Backend suite sanity (regression baseline for this session)",
+      "name": "pytest -q (7 files, 11 tests)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "cd /app/backend && python -m pytest -q -p no:cacheprovider -> '11 passed in 3.46s'. No drift detected (mascaraComanda etc. all healthy)."
+    },
+    {
+      "criterion": "Correção do GATT validada com navigator.bluetooth FALSO que reproduz o erro reportado",
+      "name": "bt-reconnect-recovers-from-gatt-drop",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Mock injetado via page.addInitScript: gatt.connect() na 1a chamada devolve server{connected:false} e dispara 'gattserverdisconnected' 30ms depois; getPrimaryServices() lança 'GATT Server is disconnected...' na 1a chamada bem-sucedida de conexão e devolve serviço com writeValueWithoutResponse na 2a. Após clicar 'Impressora Bluetooth (ESC/POS)' num pedido criado no fluxo (produto tscheck-bt-reconnect-<ts> R$7,00, balcão), apareceu o toast 'Comanda enviada para ImperioMockPrinter' (sem erro de GATT exibido). window.__mockLog confirmou: connectCalls=3 (>1), servicesCalls=2 (falhou 1x, teve sucesso na 2a), writeCalls>0, firstByte=0x1B (init ESC/POS). Modal da comanda permaneceu visível."
+    },
+    {
+      "criterion": "Falha definitiva de Bluetooth mostra mensagem amigável, sem tela branca",
+      "name": "bt-permanent-failure-friendly-error",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Mock onde gatt.connect() sempre resolve com connected:false e getPrimaryServices sempre lança o erro de GATT. Clique em 'Impressora Bluetooth' resultou em toast de erro visível com texto contendo 'GATT'/'conectar' em pt-BR (sonner error toast), seletor-impressora e botao-imprimir-sistema continuaram visíveis/habilitados (sem tela branca), e nenhum 'Unhandled'/'Uncaught' apareceu nos listeners de console/pageerror monitorados durante o teste."
+    },
+    {
+      "criterion": "Cancelar a escolha do dispositivo não é tratado como erro",
+      "name": "bt-cancel-chooser-not-error",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Mock onde bt.requestDevice() rejeita com NotFoundError 'User cancelled the requestDevice() chooser.'. Clique em 'Impressora Bluetooth' resultou no toast informativo 'Nenhum dispositivo selecionado' (não um toast de erro alarmante); confirmado que o texto 'GATT Server is disconnected' NÃO apareceu na página; seletor-impressora permaneceu visível e botao-imprimir-bluetooth/botao-voltar-impressao continuaram habilitados."
+    },
+    {
+      "criterion": "Sem regressão no fluxo de impressão real do ambiente (sem Bluetooth)",
+      "name": "impressao-regressao-sem-bluetooth-mobile",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Sem mock, viewport 390x844: criado produto tscheck-imp-regressao-<ts> (R$4,50), mesa nova (9xxx) e pedido balcão -> comanda 011 gerada. comanda-conteudo exibiu 'COMANDA 011', data 07/09/2026 (dd/mm/aaaa), o item do produto e comanda-total=R$4,50. Ao clicar Imprimir, seletor-impressora abriu com as 3 opções: Bluetooth e USB DESABILITADOS com aviso-suporte-impressao visível ('Seu navegador não oferece Bluetooth... Use Chrome no Android ou no computador, ou imprima pelo sistema.'), Imprimir pelo sistema HABILITADO. Voltar retornou ao recibo (comanda-modal e botao-imprimir-comanda visíveis de novo). Nenhum erro de console relevante (só um 429 de rate-limit numa execução anterior que foi sanada com supervisorctl restart antes desta corrida final; a corrida reportada aqui não teve esse erro)."
+    }
+  ],
+  "bugs": [],
+  "action_items": [
+    {
+      "severity": "low",
+      "type": "rate_limit",
+      "description": "Rodar os checks de bluetooth sequencialmente (cada um faz login) chegou perto do limite de 10 tentativas/15min por IP; uma execução do check de regressão mobile bateu 429. Contornado com 'sudo supervisorctl restart backend' antes da corrida final, como orientado no briefing. Nenhuma ação de app necessária."
+    },
+    {
+      "severity": "note",
+      "type": "note",
+      "description": "Checks da suíte de iteration_3 (pedido/mesa/pagamento/comanda/identidade visual e regressões de mobile já existentes) não foram re-executados nesta sessão porque o briefing desta rodada é especificamente sobre a correção de impressão Bluetooth em impressao.ts/ComandaModal.tsx e nenhum outro arquivo foi alterado; para uma validação completa de regressão geral, recomenda-se re-rodar aquela suíte por nome numa próxima iteração dedicada."
+    }
+  ]
+}

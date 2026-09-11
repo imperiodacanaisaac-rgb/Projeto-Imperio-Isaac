@@ -236,6 +236,28 @@ de Bluetooth/USB ficam desabilitados quando a API não existe, com aviso explica
 limitação. Texto ESC/POS formatado em 32 colunas e sem acentos (impressoras térmicas
 simples não têm CP860 confiável).
 
+### Reconexão GATT no Android (correção de bug)
+
+No Android o GATT costuma cair nos primeiros instantes após o pareamento, gerando
+`GATT Server is disconnected. Cannot retrieve services.` em `getPrimaryServices()`.
+`imprimirBluetooth()` trata isso com:
+
+1. `conectar()` — até 3 tentativas de `gatt.connect()` (idempotente) com atraso
+   escalonado (`300ms × tentativa`) e checagem de `server.connected` antes de seguir;
+2. listener de `gattserverdisconnected` que marca a queda para forçar reconexão em
+   vez de falhar;
+3. `obterCanalEscrita()` — 2 tentativas em volta de `getPrimaryServices()`, chamando
+   `server.connect()` novamente quando `server.connected` é `false`;
+4. `gatt.disconnect()` no `finally`, liberando o rádio para a próxima impressão.
+
+A allowlist `SERVICOS_SERIAL` precisa cobrir os UUIDs usuais de impressora térmica:
+com `acceptAllDevices`, `getPrimaryServices()` **só** devolve serviços allowlistados.
+
+Cobertura de teste: `navigator.bluetooth` é mockado via `page.addInitScript` para
+reproduzir a queda de GATT (ver checks `bt-reconnect-recovers-from-gatt-drop`,
+`bt-permanent-failure-friendly-error`, `bt-cancel-chooser-not-error`). Hardware real
+não é verificável em ambiente automatizado.
+
 **Limitações reais**: Web Bluetooth/WebUSB não existem em iOS/Safari nem em Firefox —
 nesses casos só o caminho 3 funciona. No desktop Linux/Windows, o driver de impressora
 do sistema pode capturar o dispositivo USB e impedir o WebUSB.

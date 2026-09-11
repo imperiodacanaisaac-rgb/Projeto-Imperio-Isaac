@@ -22,11 +22,20 @@ interface BluetoothService {
   getCharacteristics: () => Promise<BluetoothCharacteristic[]>;
 }
 interface BluetoothServer {
+  connected: boolean;
+  connect: () => Promise<BluetoothServer>;
+  disconnect: () => void;
   getPrimaryServices: () => Promise<BluetoothService[]>;
 }
 interface BluetoothDeviceLike {
   name?: string;
-  gatt?: { connect: () => Promise<BluetoothServer> };
+  gatt?: {
+    connected: boolean;
+    connect: () => Promise<BluetoothServer>;
+    disconnect: () => void;
+  };
+  addEventListener?: (tipo: string, fn: () => void) => void;
+  removeEventListener?: (tipo: string, fn: () => void) => void;
 }
 interface BluetoothLike {
   requestDevice: (opts: {
@@ -182,10 +191,18 @@ export function montarBytesEscPos(d: DadosComanda): Uint8Array<ArrayBuffer> {
 }
 
 // ---------- caminho 1: Bluetooth (Web Bluetooth + ESC/POS) ----------
+// Com `acceptAllDevices`, getPrimaryServices() SÓ devolve serviços presentes nesta
+// allowlist — por isso a lista precisa cobrir os UUIDs usuais de impressora térmica.
 const SERVICOS_SERIAL = [
-  "000018f0-0000-1000-8000-00805f9b34fb", // serial comum em impressoras térmicas
+  "000018f0-0000-1000-8000-00805f9b34fb", // serial mais comum (Goojprt, Zjiang, MTP)
   "0000ff00-0000-1000-8000-00805f9b34fb",
+  "0000ffe0-0000-1000-8000-00805f9b34fb", // módulos HM-10 / JDY
+  "0000ff12-0000-1000-8000-00805f9b34fb",
+  "0000fee7-0000-1000-8000-00805f9b34fb",
+  "0000ae30-0000-1000-8000-00805f9b34fb",
   "e7810a71-73ae-499d-8c15-faa9aef0c3f2",
+  "49535343-fe7d-4ae5-8fa9-9fafd205e455", // Microchip/ISSC SPP transparente
+  "0000180a-0000-1000-8000-00805f9b34fb",
 ];
 
 export async function imprimirBluetooth(d: DadosComanda): Promise<string> {
@@ -196,38 +213,91 @@ export async function imprimirBluetooth(d: DadosComanda): Promise<string> {
     acceptAllDevices: true,
     optionalServices: SERVICOS_SERIAL,
   });
-  if (!device.gatt) throw new Error("O dispositivo selecionado não expõe GATT.");
+  const gatt = device.gatt;
+  if (!gatt) throw new Error("O dispositivo selecionado não expõe GATT.");
 
-  const server = await device.gatt.connect();
-  const services = await server.getPrimaryServices();
+  const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  let alvo: BluetoothCharacteristic | null = null;
-  for (const s of services) {
-    const chars = await s.getCharacteristics().catch(() => []);
-    for (const c of chars) {
-      if (c.writeValue || c.writeValueWithoutResponse) {
-        alvo = c;
-        break;
+  // No Android o GATT costuma cair nos primeiros instantes após o pareamento.
+  // Marcamos a queda por evento para reconectar em vez de falhar.
+  let caiu = false;
+  const onDrop = () => {
+    caiu = true;
+  };
+  device.addEventListener?.("gattserverdisconnected", onDrop);
+
+  /** Conecta de forma síncrona e só devolve o server já estabilizado. */
+  async function conectar(): Promise<BluetoothServer> {
+    let ultimoErro: unknown = null;
+    for (let tentativa = 1; tentativa <= 3; tentativa++) {
+      try {
+        caiu = false;
+        // connect() é idempotente: se já estiver conectado, resolve imediatamente.
+        const server = await gatt!.connect();
+        // Deixa a pilha BLE assentar antes de descobrir serviços (crucial no mobile).
+        await espera(300 * tentativa);
+        if (server.connected && !caiu) return server;
+        ultimoErro = new Error("GATT caiu logo após conectar");
+      } catch (e) {
+        ultimoErro = e;
+        await espera(400 * tentativa);
       }
     }
-    if (alvo) break;
-  }
-  if (!alvo) {
-    throw new Error(
-      "Não encontramos um canal de escrita na impressora. Verifique se ela está pareada e ligada.",
-    );
+    throw ultimoErro instanceof Error
+      ? ultimoErro
+      : new Error("Não foi possível manter a conexão com a impressora.");
   }
 
-  const bytes = montarBytesEscPos(d);
-  // impressoras térmicas costumam limitar o pacote a ~180 bytes
-  const passo = 180;
-  for (let i = 0; i < bytes.length; i += passo) {
-    const parte = bytes.slice(i, i + passo);
-    if (alvo.writeValueWithoutResponse) await alvo.writeValueWithoutResponse(parte);
-    else if (alvo.writeValue) await alvo.writeValue(parte);
-    await new Promise((r) => setTimeout(r, 40));
+  /** Descobre a característica de escrita, reconectando se o server cair no meio. */
+  async function obterCanalEscrita(): Promise<BluetoothCharacteristic> {
+    let ultimoErro: unknown = null;
+    for (let tentativa = 1; tentativa <= 2; tentativa++) {
+      let server = await conectar();
+      try {
+        // Reconexão forçada antes de buscar serviços, se o server não estiver ativo.
+        if (!server.connected) server = await server.connect();
+        const services = await server.getPrimaryServices();
+        for (const s of services) {
+          const chars = await s.getCharacteristics().catch(() => []);
+          const c = chars.find((x) => x.writeValueWithoutResponse || x.writeValue);
+          if (c) return c;
+        }
+        ultimoErro = new Error(
+          "Não encontramos um canal de escrita na impressora. Verifique se ela está pareada e ligada.",
+        );
+        break;
+      } catch (e) {
+        ultimoErro = e;
+        // "GATT Server is disconnected": reconecta e tenta de novo.
+        await espera(500);
+      }
+    }
+    throw ultimoErro instanceof Error
+      ? ultimoErro
+      : new Error("Falha ao preparar a impressora Bluetooth.");
   }
-  return device.name || "impressora Bluetooth";
+
+  try {
+    const alvo = await obterCanalEscrita();
+    const bytes = montarBytesEscPos(d);
+    // impressoras térmicas costumam limitar o pacote a ~180 bytes
+    const passo = 180;
+    for (let i = 0; i < bytes.length; i += passo) {
+      const parte = bytes.slice(i, i + passo);
+      if (alvo.writeValueWithoutResponse) await alvo.writeValueWithoutResponse(parte);
+      else if (alvo.writeValue) await alvo.writeValue(parte);
+      await espera(40);
+    }
+    return device.name || "impressora Bluetooth";
+  } finally {
+    device.removeEventListener?.("gattserverdisconnected", onDrop);
+    // Libera o rádio para a próxima impressão.
+    try {
+      if (gatt.connected) gatt.disconnect();
+    } catch {
+      /* ignora */
+    }
+  }
 }
 
 // ---------- caminho 2: USB (WebUSB + ESC/POS) ----------
