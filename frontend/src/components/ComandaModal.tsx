@@ -37,6 +37,7 @@ export function ComandaModal({
     mesaNumero: pedido.mesaNumero,
     atendenteNome: pedido.atendenteNome,
     criadoEm: pedido.criadoEm,
+    observacao: pedido.observacao,
     itens: pedido.itens.map((i) => ({
       quantidade: i.quantidade,
       produtoNome: i.produtoNome,
@@ -83,7 +84,7 @@ export function ComandaModal({
           data-testid="comanda-conteudo"
         >
           <p className="text-center font-bold uppercase tracking-widest">{estabelecimento}</p>
-          <p className="mt-1 text-center text-[11px]">Caldo de cana &amp; pastel</p>
+          <p className="mt-1 text-center text-[11px]">Pastel e Caldo de Cana</p>
           <p className="my-2 border-y border-dashed border-[#a8a29e] py-1 text-center text-base font-bold">
             COMANDA {pedido.numeroComanda}
             <span className="block text-[11px] font-semibold">
@@ -109,6 +110,15 @@ export function ComandaModal({
             <span>TOTAL</span>
             <span data-testid="comanda-total">{brl(pedido.total)}</span>
           </div>
+          {pedido.observacao && (
+            <div
+              className="mt-2 border-t border-dashed border-[#a8a29e] pt-2"
+              data-testid="comanda-observacao"
+            >
+              <p className="font-bold">OBS:</p>
+              <p className="whitespace-pre-wrap break-words">{pedido.observacao}</p>
+            </div>
+          )}
           {pedido.pagamento && (
             <div className="mt-2 text-[12px]">
               <p>Pagamento: {FORMA_LABEL[pedido.pagamento.forma]}</p>

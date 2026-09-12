@@ -211,6 +211,7 @@ class Comanda(BaseModel):
     clienteNome: Optional[str] = None
     mesaNumero: Optional[int] = None
     atendenteNome: str
+    observacao: Optional[str] = None
     itens: list[ItemPedido]
     total: float
     status: StatusPedido

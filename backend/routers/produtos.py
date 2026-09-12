@@ -96,11 +96,17 @@ async def mudar_status(
 @router.delete("/{pid}")
 async def excluir(pid: int, user: dict = Depends(permitir("ADMIN", "DEV"))):
     produto = await _buscar(pid)
-    if await db.pedidos.count_documents({"itens.produtoId": pid}):
+    vendido = await db.pedidos.count_documents({"itens.produtoId": pid})
+    # O DEV pode excluir mesmo com histórico de venda; o ADMIN continua bloqueado.
+    if vendido and user["role"] != "DEV":
         raise HTTPException(
             status_code=400,
-            detail="Este produto já foi vendido. Desative-o em vez de excluir.",
+            detail=(
+                "Este produto já foi vendido. Desative-o em vez de excluir, "
+                "ou peça a exclusão ao desenvolvedor."
+            ),
         )
     await db.produtos.delete_one({"id": pid})
-    await registrar_log(user["id"], "EXCLUIU_PRODUTO", produto["nome"])
+    detalhe = produto["nome"] + (f" (tinha {vendido} venda(s) no histórico)" if vendido else "")
+    await registrar_log(user["id"], "EXCLUIU_PRODUTO", detalhe)
     return {"mensagem": "Produto excluído"}

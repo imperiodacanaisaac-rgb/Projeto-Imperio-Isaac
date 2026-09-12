@@ -376,6 +376,7 @@ async def comanda(pid: int, _user: dict = Depends(usuario_atual)):
         clienteNome=pedido.clienteNome,
         mesaNumero=pedido.mesaNumero,
         atendenteNome=pedido.atendenteNome,
+        observacao=pedido.observacao,
         itens=pedido.itens,
         total=pedido.total,
         status=pedido.status,

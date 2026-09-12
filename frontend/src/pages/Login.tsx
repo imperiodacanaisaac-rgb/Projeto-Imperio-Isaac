@@ -130,11 +130,6 @@ export default function Login() {
             )}
             Entrar
           </Button>
-
-          <div className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-            <p className="font-semibold text-foreground">Acessos de demonstração</p>
-            <p>dev / dev123 — admin / admin123 — atendente / atendente123</p>
-          </div>
         </form>
       </div>
     </div>

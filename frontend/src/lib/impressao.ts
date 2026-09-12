@@ -115,6 +115,7 @@ export interface DadosComanda {
   mesaNumero: number | null;
   atendenteNome: string;
   criadoEm: string;
+  observacao: string | null;
   itens: ItemComanda[];
   total: number;
   formaPagamento?: string | null;
@@ -143,7 +144,7 @@ export function montarTextoComanda(d: DadosComanda): string {
   const l: string[] = [];
   const sep = "-".repeat(LARGURA_COLUNAS);
   l.push(centralizar(d.estabelecimento.toUpperCase()));
-  l.push(centralizar("Caldo de cana & pastel"));
+  l.push(centralizar("Pastel e Caldo de Cana"));
   l.push(sep);
   l.push(centralizar(`COMANDA ${d.numeroComanda}`));
   l.push(centralizar(new Date(d.criadoEm).toLocaleDateString("pt-BR")));
@@ -164,6 +165,21 @@ export function montarTextoComanda(d: DadosComanda): string {
   }
   l.push(sep);
   l.push(linhaDupla("TOTAL", `R$ ${real(d.total)}`));
+  if (d.observacao) {
+    l.push(sep);
+    l.push("OBS:");
+    // quebra a observação em linhas de 32 colunas
+    let linha = "";
+    for (const palavra of d.observacao.split(/\s+/)) {
+      if ((linha + " " + palavra).trim().length > LARGURA_COLUNAS) {
+        l.push(linha.trim());
+        linha = palavra;
+      } else {
+        linha = `${linha} ${palavra}`;
+      }
+    }
+    if (linha.trim()) l.push(linha.trim());
+  }
   if (d.formaPagamento) l.push(`Pagamento: ${d.formaPagamento}`);
   if (d.troco != null && d.troco > 0) l.push(linhaDupla("Troco", `R$ ${real(d.troco)}`));
   l.push(sep);

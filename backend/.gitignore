@@ -1,0 +1,4 @@
+
+# credenciais Firebase
+secrets/
+*firebase-admin*.json
