@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// Império Da Cana — regras do Firestore (projeto imperiodacanagestao-c3304)
+//
+// IMPORTANTE: todo o acesso ao banco é feito pelo BACKEND (FastAPI) usando o
+// Firebase Admin SDK com Service Account. O Admin SDK NÃO passa por estas
+// regras — ele tem acesso total por definição. Nenhum navegador/app cliente
+// fala com o Firestore diretamente.
+//
+// Portanto, a regra correta e mais segura é NEGAR 100% do acesso de clientes.
+// Assim, mesmo que a apiKey web (que é pública por natureza) vaze, ninguém
+// consegue ler nem escrever os dados de vendas, usuários ou caixa.
+//
+// Os 3 perfis (DEV, ADMIN, ATENDENTE) são aplicados no backend, por rota,
+// via JWT + middleware de permissão (backend/lib/auth.py e os routers),
+// com as hierarquias: DEV = total, ADMIN = produtos/caixa/relatórios/
+// funcionários ATENDENTE, ATENDENTE = mesas/pedidos/pagamentos.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

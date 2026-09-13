@@ -273,3 +273,21 @@ do sistema pode capturar o dispositivo USB e impedir o WebUSB.
 - Itens do pedido e pagamento são documentos embutidos no pedido (Mongo), não
   tabelas separadas — o `precoUnit` continua congelado na venda.
 - Tabelas não têm paginação de UI (listas limitadas no backend).
+
+## Banco de dados (atualizado)
+
+Firebase **Firestore**, projeto **`imperiodacanagestao-c3304`** (substituiu o projeto
+anterior `imperio-da-cana-issac`, cuja service account foi removida pelo dono —
+`invalid_grant: account not found` —, por isso o histórico antigo não pôde ser migrado).
+
+- Credencial: `backend/secrets/firebase-admin-novo.json` (Service Account / Admin SDK),
+  apontada por `FIREBASE_CREDENTIALS` em `backend/.env`.
+- Acesso 100% pelo backend via `backend/lib/db.py` (adaptador com a interface do Motor).
+  O frontend nunca fala com o Firestore.
+- Regras do Firestore: `/app/firestore.rules` — **nega todo acesso de cliente**
+  (`allow read, write: if false`), pois o Admin SDK não passa pelas regras e as
+  permissões DEV/ADMIN/ATENDENTE são aplicadas no backend (JWT + middleware).
+- Scripts: `backend/seed_firestore.py` (3 usuários + configs + 6 mesas + 5 produtos),
+  `backend/limpar_operacao.py` (zera operação), `backend/scripts/migrar_firestore.py`
+  (copia coleções entre projetos, quando as duas credenciais são válidas).
+  Rodar scripts standalone exige `FIREBASE_CREDENTIALS=...` no comando (não leem .env).
