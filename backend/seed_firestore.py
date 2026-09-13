@@ -7,9 +7,9 @@ from lib.auth import hash_senha
 from lib.db import db
 
 USUARIOS = [
-    {"id": 1, "nome": "Desenvolvedor", "usuario": "mbangipedro@gmail.com", "senha": "dev@IC", "role": "DEV"},
-    {"id": 2, "nome": "Isaac — Dono", "usuario": "imperiodacanaisaac@gmail.com", "senha": "Isaac@IC", "role": "ADMIN"},
-    {"id": 3, "nome": "Atendente", "usuario": "Atendente", "senha": "atendente123", "role": "ATENDENTE"},
+    {"id": 1, "nome": "Desenvolvedor", "usuario": "mbangipedro@gmail.com", "senha": "DevIC@15", "role": "DEV"},
+    {"id": 2, "nome": "Isaac — Dono", "usuario": "imperiodacanagestao@gmail.com", "senha": "GestaoICIsaac@15", "role": "ADMIN"},
+    {"id": 3, "nome": "Atendente", "usuario": "Atendente", "senha": "Atendente123", "role": "ATENDENTE"},
 ]
 
 PRODUTOS = [

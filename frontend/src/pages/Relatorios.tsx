@@ -335,8 +335,8 @@ export default function Relatorios() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={pizza} dataKey="value" nameKey="name" outerRadius={85} label>
-                        {pizza.map((_, i) => (
-                          <Cell key={i} fill={CORES[i % CORES.length]} />
+                        {pizza.map((fatia, i) => (
+                          <Cell key={fatia.name} fill={CORES[i % CORES.length]} />
                         ))}
                       </Pie>
                       <Tooltip formatter={(v) => brl(Number(v))} />

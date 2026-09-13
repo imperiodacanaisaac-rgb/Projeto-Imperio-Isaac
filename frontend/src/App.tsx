@@ -16,6 +16,11 @@ import Relatorios from "@/pages/Relatorios";
 import Configuracoes from "@/pages/Configuracoes";
 import Logs from "@/pages/Logs";
 import NotFound from "@/pages/NotFound";
+import type { Role } from "@/lib/types";
+
+// Fora do componente: referências estáveis entre renders.
+const ROLES_GESTAO: Role[] = ["ADMIN", "DEV"];
+const ROLES_DEV: Role[] = ["DEV"];
 
 export default function App() {
   return (
@@ -38,7 +43,7 @@ export default function App() {
           <Route
             path="/funcionarios"
             element={
-              <ProtectedRoute roles={["ADMIN", "DEV"]}>
+              <ProtectedRoute roles={ROLES_GESTAO}>
                 <Funcionarios />
               </ProtectedRoute>
             }
@@ -46,7 +51,7 @@ export default function App() {
           <Route
             path="/produtos"
             element={
-              <ProtectedRoute roles={["ADMIN", "DEV"]}>
+              <ProtectedRoute roles={ROLES_GESTAO}>
                 <Produtos />
               </ProtectedRoute>
             }
@@ -54,7 +59,7 @@ export default function App() {
           <Route
             path="/caixa"
             element={
-              <ProtectedRoute roles={["ADMIN", "DEV"]}>
+              <ProtectedRoute roles={ROLES_GESTAO}>
                 <Caixa />
               </ProtectedRoute>
             }
@@ -62,7 +67,7 @@ export default function App() {
           <Route
             path="/relatorios"
             element={
-              <ProtectedRoute roles={["ADMIN", "DEV"]}>
+              <ProtectedRoute roles={ROLES_GESTAO}>
                 <Relatorios />
               </ProtectedRoute>
             }
@@ -70,7 +75,7 @@ export default function App() {
           <Route
             path="/usuarios"
             element={
-              <ProtectedRoute roles={["DEV"]}>
+              <ProtectedRoute roles={ROLES_DEV}>
                 <Funcionarios modoDev />
               </ProtectedRoute>
             }
@@ -78,7 +83,7 @@ export default function App() {
           <Route
             path="/configuracoes"
             element={
-              <ProtectedRoute roles={["DEV"]}>
+              <ProtectedRoute roles={ROLES_DEV}>
                 <Configuracoes />
               </ProtectedRoute>
             }
@@ -86,7 +91,7 @@ export default function App() {
           <Route
             path="/logs"
             element={
-              <ProtectedRoute roles={["DEV"]}>
+              <ProtectedRoute roles={ROLES_DEV}>
                 <Logs />
               </ProtectedRoute>
             }

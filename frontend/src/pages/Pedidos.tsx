@@ -309,8 +309,11 @@ export default function Pedidos() {
                 </span>
               </div>
               <ul className="divide-y divide-border">
-                {detalhe.itens.map((it, i) => (
-                  <li key={i} className="flex justify-between py-2 text-sm">
+                {detalhe.itens.map((it) => (
+                  <li
+                    key={`${it.produtoId}-${it.observacao ?? ""}`}
+                    className="flex justify-between py-2 text-sm"
+                  >
                     <span>
                       {it.quantidade}x {it.produtoNome}
                     </span>

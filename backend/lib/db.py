@@ -115,8 +115,9 @@ class _Cursor:
     async def to_list(self, length: int | None = None) -> list[dict]:
         docs = await self._c._todos(self._f)
         for campo, direcao in reversed(self._sort):
+            # `c=campo` fixa o campo da iteração atual (evita late binding).
             docs.sort(
-                key=lambda d: (_get(d, campo) is None, _get(d, campo)),
+                key=lambda d, c=campo: (_get(d, c) is None, _get(d, c)),
                 reverse=direcao < 0,
             )
         return docs[:length] if length else docs
