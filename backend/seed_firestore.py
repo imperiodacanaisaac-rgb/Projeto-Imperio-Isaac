@@ -1,15 +1,18 @@
 """Cria os 3 usuários de acesso no Firestore (idempotente)."""
 
 import asyncio
+import os
 from datetime import datetime, timezone
 
 from lib.auth import hash_senha
 from lib.db import db
 
 USUARIOS = [
-    {"id": 1, "nome": "Desenvolvedor", "usuario": "mbangipedro@gmail.com", "senha": "DevIC@15", "role": "DEV"},
-    {"id": 2, "nome": "Isaac — Dono", "usuario": "imperiodacanagestao@gmail.com", "senha": "GestaoICIsaac@15", "role": "ADMIN"},
-    {"id": 3, "nome": "Atendente", "usuario": "Atendente", "senha": "Atendente123", "role": "ATENDENTE"},
+    # Senhas nunca ficam no código: informe no ambiente ao rodar o seed, ex.:
+    # SEED_SENHA_DEV=... SEED_SENHA_ADMIN=... SEED_SENHA_ATENDENTE=... python seed_firestore.py
+    {"id": 1, "nome": "Desenvolvedor", "usuario": os.environ.get("SEED_USUARIO_DEV", "mbangipedro@gmail.com"), "senha": os.environ.get("SEED_SENHA_DEV", ""), "role": "DEV"},
+    {"id": 2, "nome": "Isaac — Dono", "usuario": os.environ.get("SEED_USUARIO_ADMIN", "imperiodacanaisaac@gmail.com"), "senha": os.environ.get("SEED_SENHA_ADMIN", ""), "role": "ADMIN"},
+    {"id": 3, "nome": "Atendente", "usuario": os.environ.get("SEED_USUARIO_ATENDENTE", "Atendente"), "senha": os.environ.get("SEED_SENHA_ATENDENTE", ""), "role": "ATENDENTE"},
 ]
 
 PRODUTOS = [
@@ -34,6 +37,12 @@ CONFIGS = {
 async def main() -> None:
     agora = datetime.now(timezone.utc)
     for u in USUARIOS:
+        if not u["senha"]:
+            print(
+                f"pulado: {u['usuario']} — defina SEED_SENHA_{u['role']} no ambiente "
+                "para criar este usuário"
+            )
+            continue
         if await db.usuarios.find_one({"usuario": u["usuario"]}):
             print(f"já existe: {u['usuario']}")
             continue

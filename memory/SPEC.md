@@ -289,3 +289,15 @@ histórico: produtos, pedidos, caixa e logs). Credencial: `backend/secrets/fireb
   `backend/limpar_operacao.py` (zera operação), `backend/scripts/migrar_firestore.py`
   (copia coleções entre projetos, quando as duas credenciais são válidas).
   Rodar scripts standalone exige `FIREBASE_CREDENTIALS=...` no comando (não leem .env).
+
+## Segurança (correções da auditoria)
+
+- `JWT_SECRET` é obrigatório e forte: `lib/auth.py` **falha fechada** (RuntimeError) se estiver
+  ausente ou com menos de 32 caracteres. Não há mais valor padrão no código. Gerar com
+  `openssl rand -hex 32`. Rotacionar o segredo invalida todas as sessões emitidas.
+- `seed_firestore.py` não contém senhas: os logins vêm de `SEED_USUARIO_*` e as senhas de
+  `SEED_SENHA_DEV|ADMIN|ATENDENTE` no ambiente; sem a variável, o usuário é pulado.
+- `CORS_ORIGINS` é uma allowlist explícita (domínio do preview + localhost:3000), não `*`.
+- Busca por comanda usa `re.escape` (`routers/pedidos.py`), evitando DoS por regex do usuário.
+- Pendente (aceito conscientemente): atendentes podem pagar/editar comandas uns dos outros —
+  é o fluxo desejado num balcão único, onde qualquer atendente fecha a conta do cliente.

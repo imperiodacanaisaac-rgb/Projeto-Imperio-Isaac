@@ -10,7 +10,13 @@ from passlib.context import CryptContext
 
 from lib.db import db
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "imperio_cana_secret_troque_em_producao")
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+if not JWT_SECRET or len(JWT_SECRET) < 32:
+    # Falha fechada: sem um segredo forte em backend/.env qualquer pessoa poderia
+    # assinar um token válido e virar DEV. Gere com: openssl rand -hex 32
+    raise RuntimeError(
+        "JWT_SECRET ausente ou fraco em backend/.env (mínimo 32 caracteres aleatórios)."
+    )
 JWT_ALG = "HS256"
 JWT_HOURS = 8
 

@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -180,7 +181,8 @@ async def listar(
     if status:
         filtro["status"] = status
     if numeroComanda:
-        filtro["numeroComanda"] = {"$regex": numeroComanda, "$options": "i"}
+        # re.escape: a busca é literal, sem permitir regex do usuário (DoS por backtracking).
+        filtro["numeroComanda"] = {"$regex": re.escape(numeroComanda), "$options": "i"}
     if mesaId is not None:
         filtro["mesaId"] = mesaId
     if meus:
