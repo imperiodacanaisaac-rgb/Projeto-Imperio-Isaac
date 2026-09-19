@@ -153,7 +153,7 @@ export default function Layout() {
               <NavLink
                 key={item.para}
                 to={item.para}
-                end={item.para === "/"}
+                end
                 onClick={() => setAberto(false)}
                 className={({ isActive }) =>
                   `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors duration-150 ${

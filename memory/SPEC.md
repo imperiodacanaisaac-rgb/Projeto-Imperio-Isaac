@@ -276,12 +276,10 @@ do sistema pode capturar o dispositivo USB e impedir o WebUSB.
 
 ## Banco de dados (atualizado)
 
-Firebase **Firestore**, projeto **`imperiodacanagestao-c3304`** (substituiu o projeto
-anterior `imperio-da-cana-issac`, cuja service account foi removida pelo dono —
-`invalid_grant: account not found` —, por isso o histórico antigo não pôde ser migrado).
+Firebase **Firestore**, projeto **`imperio-da-cana-issac`** (banco original, com todo o
+histórico: produtos, pedidos, caixa e logs). Credencial: `backend/secrets/firebase-admin.json`.
 
-- Credencial: `backend/secrets/firebase-admin-novo.json` (Service Account / Admin SDK),
-  apontada por `FIREBASE_CREDENTIALS` em `backend/.env`.
+- Credencial apontada por `FIREBASE_CREDENTIALS` em `backend/.env`. Trocar de projeto = trocar esse caminho + reiniciar o backend.
 - Acesso 100% pelo backend via `backend/lib/db.py` (adaptador com a interface do Motor).
   O frontend nunca fala com o Firestore.
 - Regras do Firestore: `/app/firestore.rules` — **nega todo acesso de cliente**
