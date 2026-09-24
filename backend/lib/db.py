@@ -20,7 +20,7 @@ from typing import Any, Iterable
 import anyio
 import firebase_admin
 from firebase_admin import credentials, firestore
-from google.cloud.firestore_v1 import transactional
+from google.cloud.firestore_v1 import FieldFilter, transactional
 
 ROOT = Path(__file__).resolve().parent.parent
 CRED_PATH = os.environ.get("FIREBASE_CREDENTIALS", str(ROOT / "secrets" / "firebase-admin.json"))
@@ -137,16 +137,41 @@ class _Colecao:
                 return str(doc[chave])
         return None
 
-    def _sync_todos(self) -> list[dict]:
+    def _sync_todos(self, filtro: dict | None = None) -> list[dict]:
+        """Busca no Firestore já filtrando no servidor quando possível.
+
+        Ler a coleção inteira a cada consulta consumia cota (429 Quota exceeded) sem
+        necessidade: um login lia todos os usuários, abrir Pedidos lia todos os pedidos.
+        Aqui, filtros por documento (`_id`/`id`) viram um `get()` de 1 leitura e
+        igualdades simples viram `where(...)`; o resto continua sendo refinado em memória.
+        """
+        filtro = filtro or {}
+
+        chave = filtro.get("_id") or filtro.get("id")
+        if isinstance(chave, (str, int)):
+            snap = self._ref().document(str(chave)).get()
+            if not snap.exists:
+                return []
+            d = snap.to_dict() or {}
+            d.setdefault("_id", snap.id)
+            return [d]
+
+        consulta = self._ref()
+        for campo, valor in filtro.items():
+            if campo.startswith("$") or campo in ("_id", "id"):
+                continue
+            if isinstance(valor, (str, int, float, bool)) and "." not in campo:
+                consulta = consulta.where(filter=FieldFilter(campo, "==", valor))
+
         saida = []
-        for snap in self._ref().stream():
+        for snap in consulta.stream():
             d = snap.to_dict() or {}
             d.setdefault("_id", snap.id)
             saida.append(d)
         return saida
 
     async def _todos(self, filtro: dict | None = None) -> list[dict]:
-        docs = await anyio.to_thread.run_sync(self._sync_todos)
+        docs = await anyio.to_thread.run_sync(self._sync_todos, filtro)
         return [d for d in docs if _match(d, filtro)]
 
     # ---- API compatível com motor

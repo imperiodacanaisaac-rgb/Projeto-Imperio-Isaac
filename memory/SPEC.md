@@ -301,3 +301,23 @@ histórico: produtos, pedidos, caixa e logs). Credencial: `backend/secrets/fireb
 - Busca por comanda usa `re.escape` (`routers/pedidos.py`), evitando DoS por regex do usuário.
 - Pendente (aceito conscientemente): atendentes podem pagar/editar comandas uns dos outros —
   é o fluxo desejado num balcão único, onde qualquer atendente fecha a conta do cliente.
+
+## Cota do Firestore (incidente e mitigação)
+
+Sintoma: login e todas as telas falhavam com 500; log do backend mostrava
+`google.api_core.exceptions.ResourceExhausted: 429 Quota exceeded` — a cota diária
+gratuita (plano Spark) do Firestore foi esgotada.
+
+Causa: o adaptador `lib/db.py` lia a coleção inteira em cada consulta (um login lia
+todos os `usuarios`; abrir Pedidos lia todos os `pedidos`), multiplicando leituras.
+
+Mitigação aplicada:
+- `_Colecao._sync_todos(filtro)` agora empurra o filtro para o Firestore: filtro por
+  `_id`/`id` faz `document().get()` (1 leitura) e igualdades simples viram
+  `where(FieldFilter(campo, "==", valor))`. O refino em memória continua só para
+  operadores (`$regex`, `$gte`, ...).
+- `server.py` tem handler para `ResourceExhausted` devolvendo **503** com mensagem
+  clara em português, em vez de 500 cru.
+
+Se voltar a acontecer: a cota reseta à meia-noite (horário do Pacífico); para remover o
+limite, ativar o plano **Blaze** no console do Firebase.
