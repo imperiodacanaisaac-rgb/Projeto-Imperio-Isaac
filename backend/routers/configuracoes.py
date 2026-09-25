@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+import time
+
 from lib.auth import limpo, permitir, registrar_log
 from lib.db import db
 from models.schemas import Configuracao, ConfigUpdate, ResetContador
@@ -18,13 +20,31 @@ PADROES = {
 
 
 # Pública: o login precisa do nome/logo/cores antes de existir token.
+# Cache de 60s: é o endpoint mais chamado (todo carregamento de página, inclusive
+# antes do login) e as configurações quase nunca mudam — evita reler a coleção.
+_cache: dict[str, object] = {"quando": 0.0, "dados": None}
+_CACHE_TTL = 60.0
+
+
+def invalidar_cache_configuracoes() -> None:
+    _cache["quando"] = 0.0
+    _cache["dados"] = None
+
+
 @router.get("", response_model=list[Configuracao])
 async def listar():
+    agora = time.monotonic()
+    if _cache["dados"] is not None and agora - float(_cache["quando"]) < _CACHE_TTL:
+        return _cache["dados"]
+
     docs = await db.configuracoes.find().to_list(100)
     valores = {d["chave"]: d["valor"] for d in docs}
     for chave, padrao in PADROES.items():
         valores.setdefault(chave, padrao)
-    return [Configuracao(chave=k, valor=v) for k, v in valores.items()]
+    saida = [Configuracao(chave=k, valor=v) for k, v in valores.items()]
+    _cache["quando"] = agora
+    _cache["dados"] = saida
+    return saida
 
 
 @router.put("/resetar-contador-comanda")
@@ -58,4 +78,5 @@ async def atualizar(chave: str, body: ConfigUpdate, user: dict = Depends(permiti
         {"chave": chave}, {"$set": {"valor": valor}}, upsert=True
     )
     await registrar_log(user["id"], "ALTEROU_CONFIGURACAO", f"{chave} = {valor}")
+    invalidar_cache_configuracoes()
     return Configuracao(chave=chave, valor=valor)

@@ -321,3 +321,22 @@ Mitigação aplicada:
 
 Se voltar a acontecer: a cota reseta à meia-noite (horário do Pacífico); para remover o
 limite, ativar o plano **Blaze** no console do Firebase.
+
+## Otimização de leituras do Firestore (redução de cota)
+
+O frontend NÃO usa Firebase nem `onSnapshot` — não existe listener em tempo real; todo
+acesso é backend via Admin SDK. As leituras excessivas vinham do adaptador:
+
+- `lib/db.py` agora empurra para o Firestore: filtro por `_id`/`id` → `document().get()`
+  (1 leitura); igualdades simples → `where(FieldFilter(...))`; e `order_by(...) + limit(...)`
+  quando o filtro inteiro cabe no `where`. Se a ordenação exigir índice composto
+  inexistente (`FailedPrecondition`), cai para o caminho simples automaticamente.
+- Limites de lista reduzidos: pedidos `50`, movimentos de caixa `50`, logs `100`
+  (antes 500/1000/300, e aplicados só em memória). As agregações de relatório continuam
+  filtradas por período.
+- `GET /api/configuracoes` (endpoint mais chamado, público) tem cache de 60s em processo,
+  invalidado ao salvar uma configuração.
+- Frontend: `queryClient` com `staleTime` 60s, sem `refetchOnWindowFocus`/`refetchOnReconnect`.
+
+Verificação offline (sem gastar cota): `backend/tests/test_leituras_otimizadas.py` usa um
+Firestore falso e prova que filtro/ordem/limite são aplicados no banco, não em memória.

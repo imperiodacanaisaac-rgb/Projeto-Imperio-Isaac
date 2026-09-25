@@ -20,6 +20,7 @@ from typing import Any, Iterable
 import anyio
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.api_core.exceptions import FailedPrecondition
 from google.cloud.firestore_v1 import FieldFilter, transactional
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -101,7 +102,7 @@ class _Resultado:
 
 
 class _Cursor:
-    """Cursor preguiçoso: ordena/limita em memória (coleções pequenas de PDV)."""
+    """Cursor: empurra ordenação e limite para o Firestore quando é seguro."""
 
     def __init__(self, colecao: "_Colecao", filtro: dict | None):
         self._c = colecao
@@ -113,7 +114,7 @@ class _Cursor:
         return self
 
     async def to_list(self, length: int | None = None) -> list[dict]:
-        docs = await self._c._todos(self._f)
+        docs = await self._c._todos(self._f, ordem=self._sort, limite=length)
         for campo, direcao in reversed(self._sort):
             # `c=campo` fixa o campo da iteração atual (evita late binding).
             docs.sort(
@@ -137,13 +138,20 @@ class _Colecao:
                 return str(doc[chave])
         return None
 
-    def _sync_todos(self, filtro: dict | None = None) -> list[dict]:
-        """Busca no Firestore já filtrando no servidor quando possível.
+    def _sync_todos(
+        self,
+        filtro: dict | None = None,
+        ordem: list[tuple[str, int]] | None = None,
+        limite: int | None = None,
+    ) -> list[dict]:
+        """Busca no Firestore já filtrando, ordenando e limitando no servidor.
 
         Ler a coleção inteira a cada consulta consumia cota (429 Quota exceeded) sem
         necessidade: um login lia todos os usuários, abrir Pedidos lia todos os pedidos.
-        Aqui, filtros por documento (`_id`/`id`) viram um `get()` de 1 leitura e
-        igualdades simples viram `where(...)`; o resto continua sendo refinado em memória.
+        Aqui, filtro por documento (`_id`/`id`) vira um `get()` de 1 leitura, igualdades
+        simples viram `where(...)`, e `order_by(...) + limit(...)` descem para o banco
+        quando o filtro não tem operadores — então listar pedidos lê só a página pedida.
+        O refino em memória continua para operadores (`$regex`, `$gte`, ...).
         """
         filtro = filtro or {}
 
@@ -157,21 +165,49 @@ class _Colecao:
             return [d]
 
         consulta = self._ref()
+        # Só é seguro limitar/ordenar no banco se TODO o filtro couber no `where`;
+        # com operadores em memória o corte no servidor traria documentos errados.
+        tudo_no_banco = True
         for campo, valor in filtro.items():
             if campo.startswith("$") or campo in ("_id", "id"):
+                tudo_no_banco = False
                 continue
             if isinstance(valor, (str, int, float, bool)) and "." not in campo:
                 consulta = consulta.where(filter=FieldFilter(campo, "==", valor))
+            else:
+                tudo_no_banco = False
 
-        saida = []
-        for snap in consulta.stream():
-            d = snap.to_dict() or {}
-            d.setdefault("_id", snap.id)
-            saida.append(d)
-        return saida
+        consulta_otimizada = consulta
+        if tudo_no_banco and ordem and len(ordem) == 1:
+            campo, direcao = ordem[0]
+            consulta_otimizada = consulta_otimizada.order_by(
+                campo, direction=("DESCENDING" if direcao < 0 else "ASCENDING")
+            )
+        if tudo_no_banco and limite:
+            consulta_otimizada = consulta_otimizada.limit(limite)
 
-    async def _todos(self, filtro: dict | None = None) -> list[dict]:
-        docs = await anyio.to_thread.run_sync(self._sync_todos, filtro)
+        def _ler(q) -> list[dict]:
+            saida = []
+            for snap in q.stream():
+                d = snap.to_dict() or {}
+                d.setdefault("_id", snap.id)
+                saida.append(d)
+            return saida
+
+        try:
+            return _ler(consulta_otimizada)
+        except FailedPrecondition:
+            # Ordenação exigiria índice composto que não existe: cai para o caminho
+            # simples (filtro no banco, ordenação/limite em memória).
+            return _ler(consulta)
+
+    async def _todos(
+        self,
+        filtro: dict | None = None,
+        ordem: list[tuple[str, int]] | None = None,
+        limite: int | None = None,
+    ) -> list[dict]:
+        docs = await anyio.to_thread.run_sync(self._sync_todos, filtro, ordem, limite)
         return [d for d in docs if _match(d, filtro)]
 
     # ---- API compatível com motor

@@ -20,7 +20,7 @@ async def listar(
         filtro["usuarioId"] = usuarioId
     if acao:
         filtro["acao"] = acao
-    docs = await db.logs.find(filtro).sort("criadoEm", -1).to_list(300)
+    docs = await db.logs.find(filtro).sort("criadoEm", -1).to_list(100)
     return await montar_logs(docs)
 
 

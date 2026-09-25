@@ -196,7 +196,8 @@ async def listar(
                 tzinfo=timezone.utc
             ) + timedelta(days=1)
         filtro["criadoEm"] = rng
-    docs = await db.pedidos.find(filtro).sort("criadoEm", -1).to_list(500)
+    # Limite explícito: traz só a página mais recente em vez de toda a coleção.
+    docs = await db.pedidos.find(filtro).sort("criadoEm", -1).to_list(50)
     return [await montar(d) for d in docs]
 
 

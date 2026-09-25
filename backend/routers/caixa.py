@@ -86,7 +86,7 @@ async def movimentos(
         if dataFim:
             rng["$lt"] = dia_utc(dataFim) + timedelta(days=1)
         filtro["criadoEm"] = rng
-    docs = await db.caixa.find(filtro).sort("criadoEm", -1).to_list(1000)
+    docs = await db.caixa.find(filtro).sort("criadoEm", -1).to_list(50)
     return [CaixaMovimento(**{k: v for k, v in d.items() if k != "_id"}) for d in docs]
 
 
