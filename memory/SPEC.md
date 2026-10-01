@@ -362,3 +362,16 @@ desativação/troca de senha valer na hora).
 Verificado com o banco em 503: navegar por Dashboard/Mesas/Pedidos por ~21s mantém a
 sessão e o token; "Sair" limpa token + perfil e volta ao login; token inválido continua
 derrubando a sessão (401).
+
+## Publicação: Firebase Hosting
+
+Arquivos na raiz: `firebase.json` (public = `frontend/dist`, rewrite `**` → `/index.html`
+para o SPA não dar 404 no F5, cache longo em `/assets/**` e `no-cache` no `index.html`) e
+`.firebaserc` (projeto `imperio-da-cana-issac`). As configurações da Netlify
+(`netlify.toml`, `public/_redirects`) foram removidas.
+
+Hosting serve apenas estático — o backend FastAPI precisa de um serviço próprio
+(ex.: Cloud Run, no mesmo projeto Google). Com o backend no Cloud Run, basta somar em
+`firebase.json` um rewrite antes do `**`:
+`{"source": "/api/**", "run": {"serviceId": "imperio-backend", "region": "us-central1"}}`
+— assim o frontend continua chamando `/api/...` relativo, sem mexer no código nem em CORS.
