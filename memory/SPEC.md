@@ -340,3 +340,25 @@ acesso é backend via Admin SDK. As leituras excessivas vinham do adaptador:
 
 Verificação offline (sem gastar cota): `backend/tests/test_leituras_otimizadas.py` usa um
 Firestore falso e prova que filtro/ordem/limite são aplicados no banco, não em memória.
+
+## Sessão do atendente (por que deslogava) e leituras por requisição
+
+O app **não usa Firebase Auth** (nada de `setPersistence`/`browserLocalStorage`) nem
+`onSnapshot`: a sessão é um JWT próprio e todo acesso ao banco é server-side.
+
+Causas reais do logout "por inatividade" (não havia timer de inatividade nenhum):
+1. `AuthContext` apagava o token em QUALQUER erro de `/auth/me` — com o Firestore
+   retornando 503/500 por cota, a sessão caía em minutos. Agora só apaga em **401**.
+2. `ProtectedRoute` redireciona quando `user` é nulo, e `user` ficava nulo quando
+   `/auth/me` falhava. Agora o perfil é espelhado em `localStorage` (`imperio_user`) e
+   reidratado na abertura, então a sessão sobrevive a falha de rede/banco.
+3. `JWT_HOURS` 8 → **12** (cobre o expediente inteiro). Sair só pelo botão "Sair".
+
+Leituras por requisição: `lib/auth.usuario_atual` lia o usuário no Firestore em CADA
+chamada autenticada. Agora há cache em memória de 60s por usuário
+(`invalidar_cache_usuario(uid)` é chamado nas 5 escritas do router de usuários, para
+desativação/troca de senha valer na hora).
+
+Verificado com o banco em 503: navegar por Dashboard/Mesas/Pedidos por ~21s mantém a
+sessão e o token; "Sair" limpa token + perfil e volta ao login; token inválido continua
+derrubando a sessão (401).

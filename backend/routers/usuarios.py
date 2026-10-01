@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from lib.auth import (
     ROLE_RANK,
     hash_senha,
+    invalidar_cache_usuario,
     limpar_usuario,
     limpo,
     next_seq,
@@ -138,6 +139,7 @@ async def editar(uid: int, body: UsuarioUpdate, user: dict = Depends(usuario_atu
     if not campos:
         raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")
     await db.usuarios.update_one({"id": uid}, {"$set": campos})
+    invalidar_cache_usuario(uid)
     return Usuario(**limpar_usuario(await _buscar(uid)))
 
 
@@ -165,6 +167,7 @@ async def alterar_senha(uid: int, body: SenhaUpdate, user: dict = Depends(usuari
                 status_code=403, detail="Você só pode redefinir a senha de atendentes"
             )
     await db.usuarios.update_one({"id": uid}, {"$set": {"senha": hash_senha(body.novaSenha)}})
+    invalidar_cache_usuario(uid)
     await registrar_log(user["id"], "ALTEROU_SENHA", f"usuário {alvo['nome']}")
     return {"mensagem": "Senha atualizada com sucesso"}
 
@@ -174,6 +177,7 @@ async def trocar_tema(uid: int, body: TemaUpdate, user: dict = Depends(usuario_a
     if user["id"] != uid:
         raise HTTPException(status_code=403, detail="Você só pode alterar o seu próprio tema")
     await db.usuarios.update_one({"id": uid}, {"$set": {"tema": body.tema}})
+    invalidar_cache_usuario(uid)
     return Usuario(**limpar_usuario(await _buscar(uid)))
 
 
@@ -195,6 +199,7 @@ async def mudar_status(
             status_code=400, detail="Deve existir ao menos um Desenvolvedor ativo no sistema"
         )
     await db.usuarios.update_one({"id": uid}, {"$set": {"ativo": body.ativo}})
+    invalidar_cache_usuario(uid)
     await registrar_log(
         user["id"], "ALTEROU_STATUS_USUARIO", f"{alvo['nome']} -> {'ativo' if body.ativo else 'inativo'}"
     )
@@ -216,5 +221,6 @@ async def excluir(uid: int, user: dict = Depends(permitir("DEV"))):
             detail="Este usuário possui pedidos vinculados. Desative-o em vez de excluir.",
         )
     await db.usuarios.delete_one({"id": uid})
+    invalidar_cache_usuario(uid)
     await registrar_log(user["id"], "EXCLUIU_USUARIO", alvo["nome"])
     return {"mensagem": "Usuário excluído"}

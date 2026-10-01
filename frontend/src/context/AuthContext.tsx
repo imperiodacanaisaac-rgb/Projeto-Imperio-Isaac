@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPut, TOKEN_KEY } from "@/lib/api";
+import { apiGet, apiPost, apiPut, ApiError, TOKEN_KEY } from "@/lib/api";
 import type { Configuracao, LoginOut, Usuario } from "@/lib/types";
 
 interface AuthValor {
@@ -18,6 +18,23 @@ interface AuthValor {
 const AuthContext = createContext<AuthValor | null>(null);
 
 const TEMA_KEY = "imperio_tema";
+const USER_KEY = "imperio_user";
+
+function lerUsuarioSalvo(): Usuario | null {
+  // Perfil espelhado no localStorage: se /auth/me falhar (queda de rede, 500 ou 503 de
+  // cota do Firebase), o atendente continua dentro do sistema em vez de cair no login.
+  try {
+    const cru = localStorage.getItem(USER_KEY);
+    return cru ? (JSON.parse(cru) as Usuario) : null;
+  } catch {
+    return null;
+  }
+}
+
+function salvarUsuario(u: Usuario | null): void {
+  if (u) localStorage.setItem(USER_KEY, JSON.stringify(u));
+  else localStorage.removeItem(USER_KEY);
+}
 
 function aplicarTema(tema: "claro" | "escuro") {
   document.documentElement.classList.toggle("dark", tema === "escuro");
@@ -25,7 +42,9 @@ function aplicarTema(tema: "claro" | "escuro") {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
-  const [user, setUser] = useState<Usuario | null>(null);
+  const [user, setUser] = useState<Usuario | null>(() =>
+    localStorage.getItem(TOKEN_KEY) ? lerUsuarioSalvo() : null,
+  );
   const [carregando, setCarregando] = useState(true);
   const [config, setConfig] = useState<Record<string, string>>({});
   const [tema, setTema] = useState<"claro" | "escuro">(
@@ -57,9 +76,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     apiGet<Usuario>("/auth/me")
       .then((u) => {
         setUser(u);
+        salvarUsuario(u);
         setTema(u.tema === "escuro" ? "escuro" : "claro");
       })
-      .catch(() => localStorage.removeItem(TOKEN_KEY))
+      .catch((err) => {
+        // Só derruba a sessão quando o servidor REJEITA o token (401). Em queda de
+        // rede, 500 ou 503 (cota do Firebase) o token e o perfil salvo são mantidos:
+        // o atendente continua logado e a próxima tentativa recupera o perfil.
+        if (err instanceof ApiError && err.status === 401) {
+          localStorage.removeItem(TOKEN_KEY);
+          salvarUsuario(null);
+          setUser(null);
+        }
+      })
       .finally(() => setCarregando(false));
   }, []);
 
@@ -68,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const out = await apiPost<LoginOut>("/auth/login", { usuario, senha });
       localStorage.setItem(TOKEN_KEY, out.token);
       setUser(out.user);
+      salvarUsuario(out.user);
       setTema(out.user.tema === "escuro" ? "escuro" : "claro");
       qc.clear();
       return out.user;
@@ -76,7 +106,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const sair = useCallback(() => {
+    // Único caminho de saída: clique explícito no botão "Sair".
     localStorage.removeItem(TOKEN_KEY);
+    salvarUsuario(null);
     setUser(null);
     qc.clear();
   }, [qc]);
@@ -86,7 +118,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTema(novo);
     if (user) {
       apiPut<Usuario>(`/usuarios/${user.id}/tema`, { tema: novo })
-        .then(setUser)
+        .then((u) => {
+          setUser(u);
+          salvarUsuario(u);
+        })
         .catch(() => undefined);
     }
   }, [tema, user]);
@@ -100,7 +135,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       entrar,
       sair,
       alternarTema,
-      atualizarUser: setUser,
+      atualizarUser: (u: Usuario) => {
+        setUser(u);
+        salvarUsuario(u);
+      },
       recarregarConfig,
     }),
     [user, carregando, tema, config, entrar, sair, alternarTema, recarregarConfig],
