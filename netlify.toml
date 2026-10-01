@@ -1,0 +1,11 @@
+[build]
+  base = "frontend"
+  command = "yarn build"
+  publish = "dist"
+
+# SPA: qualquer rota (/login, /pedidos, /mesas...) devolve o index.html, então
+# dar F5 numa página interna não cai mais em "Page not found" da Netlify.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
