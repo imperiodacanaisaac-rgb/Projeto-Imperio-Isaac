@@ -11,7 +11,8 @@ export const queryClient = new QueryClient({
       gcTime: 30 * 60_000,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
-      retry: 1,
+      // Sem retry: numa falha de cota o retry só dobraria as leituras gastas.
+      retry: 0,
     },
   },
 });

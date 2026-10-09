@@ -26,8 +26,13 @@ async def _buscar(mid: int) -> dict:
 
 @router.get("", response_model=list[Mesa])
 async def listar(_user: dict = Depends(usuario_atual)):
-    docs = await db.mesas.find().sort("numero", 1).to_list(500)
-    return [Mesa(**d) for d in docs]
+    async def calcular() -> list[Mesa]:
+        docs = await db.mesas.find().sort("numero", 1).to_list(500)
+        return [Mesa(**d) for d in docs]
+
+    # Painel de mesas fica aberto o dia todo: 15s de cache, invalidado em toda
+    # mudança de mesa/pedido, para não reler a coleção a cada abertura de tela.
+    return await cache.lembrar("mesas:lista", 15.0, calcular)
 
 
 @router.post("", response_model=Mesa, status_code=201)
@@ -43,6 +48,7 @@ async def criar(body: MesaCreate, user: dict = Depends(usuario_atual)):
         "criadoEm": datetime.now(timezone.utc),
     }
     await db.mesas.insert_one(doc)
+    cache.invalidar("mesas:")
     await registrar_log(user["id"], "CRIOU_MESA", f"Mesa {body.numero}")
     return Mesa(**doc)
 
@@ -63,6 +69,7 @@ async def editar(mid: int, body: MesaUpdate, _user: dict = Depends(usuario_atual
     if not campos:
         raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")
     await db.mesas.update_one({"id": mid}, {"$set": campos})
+    cache.invalidar("mesas:")
     return Mesa(**await _buscar(mid))
 
 
@@ -77,6 +84,7 @@ async def mudar_status(mid: int, body: MesaStatusUpdate, _user: dict = Depends(u
             detail="Esta mesa possui pedido em aberto. Finalize ou cancele o pedido primeiro.",
         )
     await db.mesas.update_one({"id": mid}, {"$set": {"status": body.status}})
+    cache.invalidar("mesas:")
     return Mesa(**await _buscar(mid))
 
 
@@ -202,6 +210,7 @@ async def liberar(mid: int, user: dict = Depends(usuario_atual)):
     if mesa["status"] == "LIVRE":
         raise HTTPException(status_code=400, detail="Esta mesa já está livre")
     await db.mesas.update_one({"id": mid}, {"$set": {"status": "LIVRE"}})
+    cache.invalidar("mesas:")
     await registrar_log(user["id"], "LIBEROU_MESA", f"Mesa {mesa['numero']}")
     return Mesa(**await _buscar(mid))
 
@@ -214,5 +223,6 @@ async def excluir(mid: int, user: dict = Depends(usuario_atual)):
             status_code=400, detail="Esta mesa possui histórico de pedidos e não pode ser excluída"
         )
     await db.mesas.delete_one({"id": mid})
+    cache.invalidar("mesas:")
     await registrar_log(user["id"], "EXCLUIU_MESA", f"Mesa {mesa['numero']}")
     return {"mensagem": "Mesa excluída"}

@@ -68,7 +68,7 @@ async def registrar_log(usuario_id: int, acao: str, detalhes: Optional[str] = No
 
 
 def limpar_usuario(doc: dict[str, Any]) -> dict[str, Any]:
-    """Never leak the password hash or Mongo's _id."""
+    """Never leak the password hash or the document id."""
     out = {k: v for k, v in doc.items() if k not in ("senha", "_id")}
     return out
 

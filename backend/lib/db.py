@@ -1,6 +1,6 @@
 """Camada de dados em Firestore (Firebase Admin SDK).
 
-Expõe a MESMA interface que os routers já usavam com o motor/Mongo
+Expõe uma interface de coleções/documentos no estilo do antigo adaptador
 (`db.<colecao>.find_one/find/insert_one/find_one_and_update/...`), de modo que
 nenhum módulo de rota precisou ser reescrito na migração.
 
@@ -210,7 +210,7 @@ class _Colecao:
         docs = await anyio.to_thread.run_sync(self._sync_todos, filtro, ordem, limite)
         return [d for d in docs if _match(d, filtro)]
 
-    # ---- API compatível com motor
+    # ---- API de coleção (find/insert/update/delete)
     async def find_one(self, filtro: dict | None = None) -> dict | None:
         docs = await self._todos(filtro)
         return docs[0] if docs else None

@@ -7,14 +7,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ErroAviso, Loading, VazioAviso } from "@/components/Comuns";
 import { apiGet } from "@/lib/api";
 import { dataHora, type LogAtividade, type Usuario } from "@/lib/types";
+import { useDebounce } from "@/hooks/useDebounce";
 
 export default function Logs() {
   const [usuarioId, setUsuarioId] = useState("TODOS");
   const [acao, setAcao] = useState("");
 
+  // Sem o atraso, cada letra digitada no filtro de ação dispararia uma busca.
+  const acaoDebounce = useDebounce(acao, 500);
+
   const query = new URLSearchParams();
   if (usuarioId !== "TODOS") query.set("usuarioId", usuarioId);
-  if (acao.trim()) query.set("acao", acao.trim().toUpperCase());
+  if (acaoDebounce.trim()) query.set("acao", acaoDebounce.trim().toUpperCase());
 
   const logs = useQuery({
     queryKey: ["logs", query.toString()],

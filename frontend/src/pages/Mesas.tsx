@@ -20,6 +20,7 @@ import {
   type Pedido,
   type StatusMesa,
 } from "@/lib/types";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const STATUS: StatusMesa[] = ["LIVRE", "OCUPADA", "RESERVADA", "MANUTENCAO"];
 const FORMAS: FormaPagamento[] = ["DINHEIRO", "PIX", "CREDITO", "DEBITO"];
@@ -43,9 +44,14 @@ export default function Mesas() {
     enabled: !!detalhe,
   });
 
+  // Dividir a conta altera "pessoas" a cada clique/tecla: o atraso evita uma
+  // requisição por dígito enquanto a pessoa decide em quantas partes dividir.
+  const pessoasDebounce = useDebounce(pessoas, 500);
+
   const conta = useQuery({
-    queryKey: ["mesas", "conta", detalhe?.id, pessoas],
-    queryFn: () => apiGet<ContaMesa>(`/mesas/${detalhe?.id}/conta?pessoas=${Number(pessoas) || 1}`),
+    queryKey: ["mesas", "conta", detalhe?.id, pessoasDebounce],
+    queryFn: () =>
+      apiGet<ContaMesa>(`/mesas/${detalhe?.id}/conta?pessoas=${Number(pessoasDebounce) || 1}`),
     enabled: !!detalhe,
   });
 

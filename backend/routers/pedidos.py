@@ -166,6 +166,7 @@ async def liberar_mesa(mesa_id: Optional[int], ignorar_pedido: Optional[int] = N
         filtro["id"] = {"$ne": ignorar_pedido}
     if await db.pedidos.count_documents(filtro) == 0:
         await db.mesas.update_one({"id": mesa_id}, {"$set": {"status": "LIVRE"}})
+        cache.invalidar("mesas:")
 
 
 @router.get("", response_model=list[Pedido])
@@ -230,6 +231,7 @@ async def criar(body: PedidoCreate, user: dict = Depends(usuario_atual)):
     cache.invalidar("dash:")
     if body.mesaId is not None:
         await db.mesas.update_one({"id": body.mesaId}, {"$set": {"status": "OCUPADA"}})
+        cache.invalidar("mesas:")
     await registrar_log(
         user["id"], "CRIOU_PEDIDO", f"Comanda {doc['numeroComanda']} — R$ {total_de(itens):.2f}"
     )

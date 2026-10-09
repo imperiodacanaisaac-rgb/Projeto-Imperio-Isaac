@@ -6,7 +6,7 @@ comandas, mesas, pedidos, pagamentos, caixa, relatórios e configuração do sis
 ## Stack real (template deste ambiente)
 
 O documento original pedia Node/Express/Prisma/SQLite. O usuário aprovou manter o
-stack do template: **FastAPI + MongoDB (motor) + React 19 + TypeScript + Tailwind v4
+stack: **FastAPI + Firebase Firestore (via lib/db.py) + React 19 + TypeScript + Tailwind v4
 + shadcn/ui**. Todas as regras de negócio, permissões e telas do documento foram
 implementadas nesse stack.
 
@@ -63,7 +63,7 @@ Aplicado no backend em `POST /api/usuarios` contando **usuários ativos cadastra
 aumentar o limite." O DEV não é limitado, então sempre consegue destravar o cadastro.
 Não há como contornar pela interface — a regra vive na API.
 
-## Modelo de dados (coleções Mongo, ids inteiros via `db.contadores`)
+## Modelo de dados (coleções do Firestore, ids inteiros via `db.contadores`)
 
 - `usuarios`: id, nome, usuario (único), senha (hash), role, tema, ativo, fotoUrl, criadoEm
 - `mesas`: id, numero (único), status (LIVRE/OCUPADA/RESERVADA/MANUTENCAO), capacidade, observacao
@@ -264,13 +264,13 @@ do sistema pode capturar o dispositivo USB e impedir o WebUSB.
 
 ## Desvios conscientes do documento original
 
-- Stack FastAPI/MongoDB em vez de Express/Prisma/SQLite (aprovado pelo usuário);
+- Stack FastAPI/Firestore em vez de Express/Prisma/SQLite (aprovado pelo usuário);
   portas do template (8001/3000) em vez de 3001/5173.
 - Autenticação por Bearer token em `localStorage`, com `fetch` tipado
   (`lib/api.ts`) em vez de Axios; toasts com `sonner` em vez de `react-hot-toast`.
 - Validação com Pydantic v2 em vez de express-validator; rate limit em memória
   no processo em vez de `express-rate-limit`.
-- Itens do pedido e pagamento são documentos embutidos no pedido (Mongo), não
+- Itens do pedido e pagamento são documentos embutidos no pedido, não
   tabelas separadas — o `precoUnit` continua congelado na venda.
 - Tabelas não têm paginação de UI (listas limitadas no backend).
 
@@ -391,3 +391,21 @@ Revisão confirmou **zero consultas dentro de loop** (sem N+1) nos 10 routers.
 Frontend — `App.tsx` carrega sob demanda (`lazy` + `Suspense`) as telas de gestão/DEV
 (Funcionários, Produtos, Caixa, Relatórios, Configurações, Logs). O bundle inicial deixou
 de incluir o recharts (302 kB), que agora só baixa quando o ADMIN abre Caixa/Relatórios.
+
+## MongoDB removido do projeto
+
+Nada mais fala com MongoDB: `pymongo` e `motor` saíram de `requirements.txt`, o teste
+`test_tscheck_comanda_virada_dia.py` (que abria conexão `pymongo` direta) foi removido,
+os comentários/docstrings em `server.py`, `lib/db.py`, `lib/auth.py` e `tests/conftest.py`
+foram atualizados, e o serviço `mongodb` do supervisor está **STOPPED** (não é usado).
+
+## Requisições por digitação (debounce)
+
+Os filtros entravam direto na `queryKey` do TanStack Query, então cada tecla virava uma
+requisição e leituras no Firestore. `src/hooks/useDebounce.ts` (500 ms) foi aplicado em:
+busca por comanda e datas (`Pedidos`), divisão da conta (`Mesas`) e filtro de ação
+(`Logs`). O pedido em si já era enviado só ao clicar em "Finalizar Pedido" — o carrinho
+é estado local, sem requisição por item adicionado.
+
+Cache de lista de mesas: 15s (`mesas:lista`), invalidado nas 7 escritas que mudam mesa
+ou status de pedido.

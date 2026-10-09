@@ -39,7 +39,7 @@ def client():
 
 @pytest_asyncio.fixture
 async def aclient():
-    """Async variant, for tests that also await motor/backend helpers directly."""
+    """Async variant, for tests that also await backend helpers directly."""
     async with httpx.AsyncClient(base_url=API_URL, timeout=30.0) as c:
         yield c
 

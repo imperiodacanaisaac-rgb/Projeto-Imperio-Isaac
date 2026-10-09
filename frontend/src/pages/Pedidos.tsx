@@ -13,7 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ComandaModal } from "@/components/ComandaModal";
 import { ErroAviso, Loading, StatusBadge, VazioAviso } from "@/components/Comuns";
 import { useAuth } from "@/context/AuthContext";
-import { apiGet, apiPatch, apiPost, mensagemErro } from "@/lib/api";import { brl, dataHora, FORMA_LABEL, type FormaPagamento, type Pedido, type Produto } from "@/lib/types";
+import { apiGet, apiPatch, apiPost, mensagemErro } from "@/lib/api";
+import { brl, dataHora, FORMA_LABEL, type FormaPagamento, type Pedido, type Produto } from "@/lib/types";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const FORMAS: FormaPagamento[] = ["DINHEIRO", "PIX", "CREDITO", "DEBITO"];
 const STATUS_FILTRO = ["TODOS", "ABERTO", "PAGO", "CANCELADO"];
@@ -42,11 +44,17 @@ export default function Pedidos() {
   const [recebido, setRecebido] = useState("");
   const [motivo, setMotivo] = useState("");
 
+  // Filtros entram na queryKey: sem o atraso, cada tecla digitada na busca (e cada
+  // ajuste de data) viraria uma requisição e um punhado de leituras no Firestore.
+  const buscaDebounce = useDebounce(busca, 500);
+  const inicioDebounce = useDebounce(dataInicio, 500);
+  const fimDebounce = useDebounce(dataFim, 500);
+
   const query = new URLSearchParams();
   if (status !== "TODOS") query.set("status", status);
-  if (busca.trim()) query.set("numeroComanda", busca.trim());
-  if (dataInicio) query.set("dataInicio", dataInicio);
-  if (dataFim) query.set("dataFim", dataFim);
+  if (buscaDebounce.trim()) query.set("numeroComanda", buscaDebounce.trim());
+  if (inicioDebounce) query.set("dataInicio", inicioDebounce);
+  if (fimDebounce) query.set("dataFim", fimDebounce);
 
   const pedidos = useQuery({
     queryKey: ["pedidos", query.toString()],
