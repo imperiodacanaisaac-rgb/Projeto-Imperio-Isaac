@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from lib import cache
 from lib.auth import limpo, next_seq, registrar_log, usuario_atual
 from lib.dates import today_iso
 from lib.db import db
@@ -226,6 +227,7 @@ async def criar(body: PedidoCreate, user: dict = Depends(usuario_atual)):
         "criadoEm": datetime.now(timezone.utc),
     }
     await db.pedidos.insert_one(doc)
+    cache.invalidar("dash:")
     if body.mesaId is not None:
         await db.mesas.update_one({"id": body.mesaId}, {"$set": {"status": "OCUPADA"}})
     await registrar_log(

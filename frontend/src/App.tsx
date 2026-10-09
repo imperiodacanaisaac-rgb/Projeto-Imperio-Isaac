@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import Layout from "@/components/Layout";
@@ -9,14 +10,18 @@ import Mesas from "@/pages/Mesas";
 import NovoPedido from "@/pages/NovoPedido";
 import Pedidos from "@/pages/Pedidos";
 import Perfil from "@/pages/Perfil";
-import Funcionarios from "@/pages/Funcionarios";
-import Produtos from "@/pages/Produtos";
-import Caixa from "@/pages/Caixa";
-import Relatorios from "@/pages/Relatorios";
-import Configuracoes from "@/pages/Configuracoes";
-import Logs from "@/pages/Logs";
 import NotFound from "@/pages/NotFound";
+import { Loading } from "@/components/Comuns";
 import type { Role } from "@/lib/types";
+
+// Telas de gestão/DEV entram sob demanda: o atendente (tablet do caixa) baixa só o
+// essencial, deixando o carregamento inicial mais leve.
+const Funcionarios = lazy(() => import("@/pages/Funcionarios"));
+const Produtos = lazy(() => import("@/pages/Produtos"));
+const Caixa = lazy(() => import("@/pages/Caixa"));
+const Relatorios = lazy(() => import("@/pages/Relatorios"));
+const Configuracoes = lazy(() => import("@/pages/Configuracoes"));
+const Logs = lazy(() => import("@/pages/Logs"));
 
 // Fora do componente: referências estáveis entre renders.
 const ROLES_GESTAO: Role[] = ["ADMIN", "DEV"];
@@ -44,7 +49,7 @@ export default function App() {
             path="/funcionarios"
             element={
               <ProtectedRoute roles={ROLES_GESTAO}>
-                <Funcionarios />
+                <Suspense fallback={<Loading />}><Funcionarios /></Suspense>
               </ProtectedRoute>
             }
           />
@@ -52,7 +57,7 @@ export default function App() {
             path="/produtos"
             element={
               <ProtectedRoute roles={ROLES_GESTAO}>
-                <Produtos />
+                <Suspense fallback={<Loading />}><Produtos /></Suspense>
               </ProtectedRoute>
             }
           />
@@ -60,7 +65,7 @@ export default function App() {
             path="/caixa"
             element={
               <ProtectedRoute roles={ROLES_GESTAO}>
-                <Caixa />
+                <Suspense fallback={<Loading />}><Caixa /></Suspense>
               </ProtectedRoute>
             }
           />
@@ -68,7 +73,7 @@ export default function App() {
             path="/relatorios"
             element={
               <ProtectedRoute roles={ROLES_GESTAO}>
-                <Relatorios />
+                <Suspense fallback={<Loading />}><Relatorios /></Suspense>
               </ProtectedRoute>
             }
           />
@@ -76,7 +81,7 @@ export default function App() {
             path="/usuarios"
             element={
               <ProtectedRoute roles={ROLES_DEV}>
-                <Funcionarios modoDev />
+                <Suspense fallback={<Loading />}><Funcionarios modoDev /></Suspense>
               </ProtectedRoute>
             }
           />
@@ -84,7 +89,7 @@ export default function App() {
             path="/configuracoes"
             element={
               <ProtectedRoute roles={ROLES_DEV}>
-                <Configuracoes />
+                <Suspense fallback={<Loading />}><Configuracoes /></Suspense>
               </ProtectedRoute>
             }
           />
@@ -92,7 +97,7 @@ export default function App() {
             path="/logs"
             element={
               <ProtectedRoute roles={ROLES_DEV}>
-                <Logs />
+                <Suspense fallback={<Loading />}><Logs /></Suspense>
               </ProtectedRoute>
             }
           />

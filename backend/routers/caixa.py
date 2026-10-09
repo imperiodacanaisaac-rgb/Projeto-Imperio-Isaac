@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from lib import cache
 from lib.auth import limpo, next_seq, permitir, registrar_log, usuario_atual
 from lib.db import db
 from models.schemas import (
@@ -107,6 +108,7 @@ async def criar_movimento(
         "criadoEm": datetime.now(timezone.utc),
     }
     await db.caixa.insert_one(doc)
+    cache.invalidar("dash:")
     await registrar_log(
         user["id"], "LANCOU_CAIXA", f"{body.tipo} R$ {body.valor:.2f} — {descricao}"
     )

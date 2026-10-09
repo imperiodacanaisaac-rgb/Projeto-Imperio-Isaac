@@ -3,6 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from lib import cache
 from lib.auth import limpo, next_seq, permitir, registrar_log, usuario_atual
 from lib.db import db
 from models.schemas import Produto, ProdutoCreate, ProdutoUpdate, StatusUpdate
@@ -28,8 +29,12 @@ async def listar(
         filtro["ativo"] = ativo
     if categoria:
         filtro["categoria"] = categoria
-    docs = await db.produtos.find(filtro).sort([("ordem", 1), ("id", 1)]).to_list(500)
-    return [Produto(**d) for d in docs]
+    async def calcular() -> list[Produto]:
+        docs = await db.produtos.find(filtro).sort([("ordem", 1), ("id", 1)]).to_list(500)
+        return [Produto(**d) for d in docs]
+
+    # Cardápio quase não muda e é lido em toda abertura de "Novo Pedido": 120s de cache.
+    return await cache.lembrar(f"produtos:{ativo}:{categoria}", 120.0, calcular)
 
 
 @router.post("", response_model=Produto, status_code=201)
@@ -49,6 +54,7 @@ async def criar(body: ProdutoCreate, user: dict = Depends(permitir("ADMIN", "DEV
         "criadoEm": datetime.now(timezone.utc),
     }
     await db.produtos.insert_one(doc)
+    cache.invalidar("produtos:")
     await registrar_log(user["id"], "CRIOU_PRODUTO", nome)
     return Produto(**doc)
 
@@ -81,6 +87,7 @@ async def editar(pid: int, body: ProdutoUpdate, _user: dict = Depends(permitir("
     if not campos:
         raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")
     await db.produtos.update_one({"id": pid}, {"$set": campos})
+    cache.invalidar("produtos:")
     return Produto(**await _buscar(pid))
 
 
@@ -90,6 +97,7 @@ async def mudar_status(
 ):
     await _buscar(pid)
     await db.produtos.update_one({"id": pid}, {"$set": {"ativo": body.ativo}})
+    cache.invalidar("produtos:")
     return Produto(**await _buscar(pid))
 
 
@@ -107,6 +115,7 @@ async def excluir(pid: int, user: dict = Depends(permitir("ADMIN", "DEV"))):
             ),
         )
     await db.produtos.delete_one({"id": pid})
+    cache.invalidar("produtos:")
     detalhe = produto["nome"] + (f" (tinha {vendido} venda(s) no histórico)" if vendido else "")
     await registrar_log(user["id"], "EXCLUIU_PRODUTO", detalhe)
     return {"mensagem": "Produto excluído"}

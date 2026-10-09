@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from lib import cache
 from lib.auth import limpo, next_seq, permitir, registrar_log, usuario_atual
 from lib.db import db
 from models.schemas import (

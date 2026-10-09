@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 
+from lib import cache
 from lib.auth import permitir, usuario_atual
 from lib.db import db
 from models.schemas import (
@@ -22,6 +23,11 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 @router.get("/atendente", response_model=DashboardAtendente)
 async def atendente(user: dict = Depends(usuario_atual)):
+    # Cache de 20s por atendente: o painel é reaberto a toda hora e agrega pedidos do dia.
+    return await cache.lembrar(f"dash:atendente:{user['id']}", 20.0, lambda: _atendente(user))
+
+
+async def _atendente(user: dict) -> DashboardAtendente:
     inicio = dia_utc(None)
     fim = inicio + timedelta(days=1)
     ocupadas = await db.mesas.count_documents({"status": "OCUPADA"})
@@ -43,6 +49,10 @@ async def atendente(user: dict = Depends(usuario_atual)):
 
 @router.get("/admin", response_model=DashboardAdmin)
 async def admin(_user: dict = Depends(permitir("ADMIN", "DEV"))):
+    return await cache.lembrar("dash:admin", 30.0, _admin)
+
+
+async def _admin() -> DashboardAdmin:
     hoje = dia_utc(None)
     inicio_semana = hoje - timedelta(days=6)
     inicio_mes = datetime(hoje.year, hoje.month, 1, tzinfo=timezone.utc)

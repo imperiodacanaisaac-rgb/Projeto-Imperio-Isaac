@@ -375,3 +375,19 @@ Hosting serve apenas estático — o backend FastAPI precisa de um serviço pró
 `firebase.json` um rewrite antes do `**`:
 `{"source": "/api/**", "run": {"serviceId": "imperio-backend", "region": "us-central1"}}`
 — assim o frontend continua chamando `/api/...` relativo, sem mexer no código nem em CORS.
+
+## Otimizações adicionais (revisão de código)
+
+Backend — `lib/cache.py` (cache em memória com TTL e invalidação por prefixo):
+- `GET /produtos` → 120s (cardápio muda pouco e é lido a cada "Novo Pedido");
+  invalidado nas 4 escritas de produto.
+- `GET /dashboard/atendente` → 20s por atendente; `GET /dashboard/admin` → 30s.
+  Invalidados (`cache.invalidar("dash:")`) ao criar pedido e ao lançar entrada no caixa.
+- `GET /configuracoes` → 60s (já existia).
+- `lib/auth.usuario_atual` → cache de 60s por usuário (1 leitura por minuto em vez de
+  1 por requisição).
+Revisão confirmou **zero consultas dentro de loop** (sem N+1) nos 10 routers.
+
+Frontend — `App.tsx` carrega sob demanda (`lazy` + `Suspense`) as telas de gestão/DEV
+(Funcionários, Produtos, Caixa, Relatórios, Configurações, Logs). O bundle inicial deixou
+de incluir o recharts (302 kB), que agora só baixa quando o ADMIN abre Caixa/Relatórios.
