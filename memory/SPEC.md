@@ -409,3 +409,24 @@ busca por comanda e datas (`Pedidos`), divisão da conta (`Mesas`) e filtro de a
 
 Cache de lista de mesas: 15s (`mesas:lista`), invalidado nas 7 escritas que mudam mesa
 ou status de pedido.
+
+## Consultas em /pedidos — janela de data, limite e agregações (Query Insights)
+- **Janela obrigatória**: `GET /api/pedidos` sem datas devolve só os pedidos de HOJE (meia-noite
+  local em `APP_TZ`, via `lib/dates.inicio_do_dia`). Período informado: máx. 31 dias (400 acima).
+  Única exceção: `?mesaId=X&status=ABERTO` (já restrito por igualdade; comanda esquecida de ontem
+  ainda pode ser paga). Sempre `order_by(criadoEm DESC).limit(50)`.
+- **Adaptador `lib/db.py`**: `$gte/$gt/$lte/$lt` agora vão para o Firestore (antes eram filtrados em
+  memória = varredura completa). `$contains` vira `array_contains`. `find_one` usa `limit(1)`.
+  `count_documents` e `agregar(filtro, soma=campo)` usam `count()`/`sum()` nativos (~1 leitura).
+  Sem índice composto → `FailedPrecondition` → consulta reserva SÓ com o intervalo de data
+  (índice simples) + refino em memória; o link do índice faltante é logado uma vez.
+- **Dashboards/caixa**: atendente = agregações + últimos 8 pedidos de hoje; admin lê só os pagos de
+  hoje (ranking "mais vendidos (hoje)"); semana/mês = soma de agregados diários; dias passados
+  ficam 12h em cache (`hist:dia:*`). Caixa usa `GET /api/caixa/faturamento-dias?dias=7`.
+  Relatórios: máx. 31 dias.
+- `montar()` usa cache de mesa (`mesas:ref:*`) e de usuário (`_buscar_usuario_cacheado`) — sem N+1.
+- Pedidos gravam `produtoIds` (array). Checagem "produto já vendido" = count + array_contains.
+  Pedidos antigos receberam o campo via `scripts/backfill_produto_ids.py` (já executado, 676 docs).
+- **Índices compostos**: `/app/firestore.indexes.json` (referenciado em `firebase.json`). Publicar com
+  `firebase deploy --only firestore:indexes`. A service account do backend NÃO tem permissão para
+  criá-los (`scripts/criar_indices.py` retorna 403).

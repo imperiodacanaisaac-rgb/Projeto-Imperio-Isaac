@@ -206,9 +206,9 @@ function PainelAdmin() {
           </section>
 
           <section className="rounded-xl border border-border bg-card p-5">
-            <h2 className="font-heading text-lg font-bold">Produtos mais vendidos (mês)</h2>
+            <h2 className="font-heading text-lg font-bold">Produtos mais vendidos (hoje)</h2>
             {dash.data.maisVendidos.length === 0 ? (
-              <VazioAviso texto="Nenhuma venda registrada no mês." />
+              <VazioAviso texto="Nenhuma venda registrada hoje." />
             ) : (
               <ul className="mt-3 divide-y divide-border" data-testid="lista-mais-vendidos">
                 {dash.data.maisVendidos.map((p) => (

@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends
 
@@ -10,11 +10,10 @@ from models.schemas import (
     DashboardAdmin,
     DashboardAtendente,
     DashboardDev,
-    DiaRelatorio,
     ProdutoRanking,
     RoleContagem,
 )
-from routers.caixa import aware, dia_utc
+from routers.caixa import dia_utc, faturamento_por_dia
 from routers.logs import montar_logs
 from routers.pedidos import montar, proxima_comanda_preview, total_de
 
@@ -30,19 +29,25 @@ async def atendente(user: dict = Depends(usuario_atual)):
 async def _atendente(user: dict) -> DashboardAtendente:
     inicio = dia_utc(None)
     fim = inicio + timedelta(days=1)
+    hoje = {"$gte": inicio, "$lt": fim}
+    # count()/sum() nativos: ~1 leitura cada, em vez de ler pedido por pedido.
     ocupadas = await db.mesas.count_documents({"status": "OCUPADA"})
     livres = await db.mesas.count_documents({"status": "LIVRE"})
     abertos = await db.pedidos.count_documents({"status": "ABERTO"})
-    pagos = await db.pedidos.find(
-        {"status": "PAGO", "criadoEm": {"$gte": inicio, "$lt": fim}}
-    ).to_list(2000)
-    total_hoje = round(sum(total_de(p.get("itens", [])) for p in pagos), 2)
-    ultimos = await db.pedidos.find({"atendenteId": user["id"]}).sort("criadoEm", -1).to_list(8)
+    pagos_hoje = await db.pedidos.agregar(
+        {"status": "PAGO", "criadoEm": hoje}, soma="pagamento.valor"
+    )
+    # Só pedidos de HOJE do atendente, mais recentes primeiro, no máximo 8.
+    ultimos = (
+        await db.pedidos.find({"atendenteId": user["id"], "criadoEm": hoje})
+        .sort("criadoEm", -1)
+        .to_list(8)
+    )
     return DashboardAtendente(
         mesasOcupadas=ocupadas,
         mesasLivres=livres,
         pedidosAbertos=abertos,
-        totalVendidoHoje=total_hoje,
+        totalVendidoHoje=round(pagos_hoje["soma"], 2),
         ultimosPedidos=[await montar(p) for p in ultimos],
     )
 
@@ -54,43 +59,25 @@ async def admin(_user: dict = Depends(permitir("ADMIN", "DEV"))):
 
 async def _admin() -> DashboardAdmin:
     hoje = dia_utc(None)
-    inicio_semana = hoje - timedelta(days=6)
-    inicio_mes = datetime(hoje.year, hoje.month, 1, tzinfo=timezone.utc)
-    pagos = await db.pedidos.find(
-        {"status": "PAGO", "criadoEm": {"$gte": min(inicio_semana, inicio_mes)}}
-    ).to_list(5000)
+    amanha = hoje + timedelta(days=1)
 
-    fat_hoje = fat_semana = fat_mes = 0.0
-    pedidos_hoje = 0
-    por_dia: dict[str, dict] = defaultdict(lambda: {"faturamento": 0.0, "pedidos": 0})
+    # Documentos lidos: SOMENTE os pedidos pagos de hoje (ranking + ticket médio).
+    pagos_hoje = await db.pedidos.find(
+        {"status": "PAGO", "criadoEm": {"$gte": hoje, "$lt": amanha}}
+    ).to_list(1000)
+    # Semana e mês: soma dos agregados diários (dias passados em cache de 12h).
+    mes_dias = await faturamento_por_dia(hoje, hoje.day)
+    dias = (await faturamento_por_dia(hoje, 7))
+    mes = {"soma": sum(d.faturamento for d in mes_dias)}
+
+    fat_hoje = 0.0
     ranking: dict[str, dict] = defaultdict(lambda: {"quantidade": 0.0, "total": 0.0})
-
-    for p in pagos:
-        criado = aware(p["criadoEm"])
-        total = total_de(p.get("itens", []))
-        if criado >= hoje:
-            fat_hoje += total
-            pedidos_hoje += 1
-        if criado >= inicio_semana:
-            fat_semana += total
-            chave = criado.date().isoformat()
-            por_dia[chave]["faturamento"] += total
-            por_dia[chave]["pedidos"] += 1
-        if criado >= inicio_mes:
-            fat_mes += total
-            for i in p.get("itens", []):
-                ranking[i["produtoNome"]]["quantidade"] += i["quantidade"]
-                ranking[i["produtoNome"]]["total"] += i["quantidade"] * i["precoUnit"]
-
-    dias: list[DiaRelatorio] = []
-    cursor = inicio_semana
-    while cursor <= hoje:
-        chave = cursor.date().isoformat()
-        d = por_dia.get(chave, {"faturamento": 0.0, "pedidos": 0})
-        dias.append(
-            DiaRelatorio(data=chave, faturamento=round(d["faturamento"], 2), pedidos=d["pedidos"])
-        )
-        cursor += timedelta(days=1)
+    for p in pagos_hoje:
+        fat_hoje += total_de(p.get("itens", []))
+        for i in p.get("itens", []):
+            ranking[i["produtoNome"]]["quantidade"] += i["quantidade"]
+            ranking[i["produtoNome"]]["total"] += i["quantidade"] * i["precoUnit"]
+    pedidos_hoje = len(pagos_hoje)
 
     mais_vendidos = sorted(
         (
@@ -103,8 +90,8 @@ async def _admin() -> DashboardAdmin:
 
     return DashboardAdmin(
         faturamentoHoje=round(fat_hoje, 2),
-        faturamentoSemana=round(fat_semana, 2),
-        faturamentoMes=round(fat_mes, 2),
+        faturamentoSemana=round(sum(d.faturamento for d in dias), 2),
+        faturamentoMes=round(mes["soma"], 2),
         pedidosHoje=pedidos_hoje,
         ticketMedio=round(fat_hoje / pedidos_hoje, 2) if pedidos_hoje else 0.0,
         mesasOcupadas=await db.mesas.count_documents({"status": "OCUPADA"}),

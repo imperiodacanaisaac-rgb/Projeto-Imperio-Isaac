@@ -188,6 +188,12 @@ export default function Pedidos() {
         </div>
       </div>
 
+      <p className="text-xs text-muted-foreground" data-testid="pedidos-janela-info">
+        {dataInicio || dataFim
+          ? "Exibindo os 50 pedidos mais recentes do período escolhido (máx. 31 dias)."
+          : "Exibindo apenas os pedidos de hoje (50 mais recentes). Use as datas para ver outros dias."}
+      </p>
+
       {pedidos.isError && <ErroAviso texto="Não foi possível carregar os pedidos." />}
       {pedidos.isLoading && <Loading />}
 

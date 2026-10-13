@@ -12,6 +12,7 @@ Autorização continua 100% no backend (Admin SDK ignora as Firestore rules).
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -60,6 +61,8 @@ def _cmp_ok(valor: Any, cond: Any) -> bool:
                 return False
             if op == "$in" and valor not in esperado:
                 return False
+            if op == "$contains" and not (isinstance(valor, list) and esperado in valor):
+                return False
             if op == "$regex":
                 flags = re.I if "i" in cond.get("$options", "") else 0
                 if valor is None or not re.search(esperado, str(valor), flags):
@@ -91,6 +94,38 @@ def _aplicar_update(doc: dict, update: dict, inserindo: bool = False) -> dict:
         else:  # documento literal
             return dict(update)
     return novo
+
+
+_OPS_RANGE = {"$gte": ">=", "$gt": ">", "$lte": "<=", "$lt": "<"}
+_log = logging.getLogger("firestore")
+_indices_avisados: set[str] = set()
+
+
+class _Plano:
+    """Consulta montada: completa (igualdades + intervalo) e a reserva só-intervalo."""
+
+    def __init__(self, consulta):
+        self.consulta = consulta
+        self.so_range = None
+        self.campo_range: str | None = None
+        self.tudo_no_banco = True
+
+
+def _ler(q) -> list[dict]:
+    saida = []
+    for snap in q.stream():
+        d = snap.to_dict() or {}
+        d.setdefault("_id", snap.id)
+        saida.append(d)
+    return saida
+
+
+def _avisar_indice(colecao: str, erro: Exception) -> None:
+    """Loga (uma vez) o link do índice composto que o Firestore pede para criar."""
+    msg = str(erro)
+    if msg not in _indices_avisados:
+        _indices_avisados.add(msg)
+        _log.warning("Índice composto ausente em /%s — usando consulta reserva. %s", colecao, msg)
 
 
 class _Resultado:
@@ -138,6 +173,42 @@ class _Colecao:
                 return str(doc[chave])
         return None
 
+    def _montar_consulta(self, filtro: dict) -> _Plano:
+        """Traduz o filtro para `where(...)` nativos do Firestore.
+
+        - igualdade simples         -> `==`
+        - `$gte/$gt/$lte/$lt`       -> desigualdade no banco (1 campo por consulta)
+        - `$contains`               -> `array_contains`
+        Qualquer outro operador (`$regex`, `$ne`, ...) é refinado em memória e marca o
+        plano como "não totalmente no banco" (aí não é seguro aplicar limit no servidor).
+        """
+        plano = _Plano(self._ref())
+        for campo, valor in filtro.items():
+            if campo.startswith("$") or campo in ("_id", "id") or "." in campo:
+                plano.tudo_no_banco = False
+                continue
+            if isinstance(valor, (str, int, float, bool)):
+                plano.consulta = plano.consulta.where(filter=FieldFilter(campo, "==", valor))
+            elif (
+                isinstance(valor, dict)
+                and valor
+                and set(valor) <= set(_OPS_RANGE)
+                and plano.campo_range is None
+            ):
+                plano.campo_range = campo
+                plano.so_range = self._ref()
+                for op, v in valor.items():
+                    f = FieldFilter(campo, _OPS_RANGE[op], v)
+                    plano.consulta = plano.consulta.where(filter=f)
+                    plano.so_range = plano.so_range.where(filter=f)
+            elif isinstance(valor, dict) and set(valor) == {"$contains"}:
+                plano.consulta = plano.consulta.where(
+                    filter=FieldFilter(campo, "array_contains", valor["$contains"])
+                )
+            else:
+                plano.tudo_no_banco = False
+        return plano
+
     def _sync_todos(
         self,
         filtro: dict | None = None,
@@ -146,12 +217,11 @@ class _Colecao:
     ) -> list[dict]:
         """Busca no Firestore já filtrando, ordenando e limitando no servidor.
 
-        Ler a coleção inteira a cada consulta consumia cota (429 Quota exceeded) sem
-        necessidade: um login lia todos os usuários, abrir Pedidos lia todos os pedidos.
-        Aqui, filtro por documento (`_id`/`id`) vira um `get()` de 1 leitura, igualdades
-        simples viram `where(...)`, e `order_by(...) + limit(...)` descem para o banco
-        quando o filtro não tem operadores — então listar pedidos lê só a página pedida.
-        O refino em memória continua para operadores (`$regex`, `$gte`, ...).
+        Filtro por documento (`_id`/`id`) vira `get()` de 1 leitura; igualdades e
+        intervalos de data viram `where(...)`; `order_by + limit` descem para o banco.
+        Se faltar índice composto (FailedPrecondition), a consulta cai para SÓ o
+        intervalo de data (índice simples automático) — continua restrita ao período,
+        nunca à coleção inteira — e o resto do filtro é refinado em memória.
         """
         filtro = filtro or {}
 
@@ -164,42 +234,63 @@ class _Colecao:
             d.setdefault("_id", snap.id)
             return [d]
 
-        consulta = self._ref()
-        # Só é seguro limitar/ordenar no banco se TODO o filtro couber no `where`;
-        # com operadores em memória o corte no servidor traria documentos errados.
-        tudo_no_banco = True
-        for campo, valor in filtro.items():
-            if campo.startswith("$") or campo in ("_id", "id"):
-                tudo_no_banco = False
-                continue
-            if isinstance(valor, (str, int, float, bool)) and "." not in campo:
-                consulta = consulta.where(filter=FieldFilter(campo, "==", valor))
-            else:
-                tudo_no_banco = False
+        plano = self._montar_consulta(filtro)
+        campo_ordem, direcao = (ordem[0] if ordem and len(ordem) == 1 else (None, 1))
+        sentido = "DESCENDING" if direcao < 0 else "ASCENDING"
+        # Com desigualdade, o Firestore só ordena (sem índice extra) pelo mesmo campo.
+        ordena_no_banco = campo_ordem is not None and plano.campo_range in (None, campo_ordem)
 
-        consulta_otimizada = consulta
-        if tudo_no_banco and ordem and len(ordem) == 1:
-            campo, direcao = ordem[0]
-            consulta_otimizada = consulta_otimizada.order_by(
-                campo, direction=("DESCENDING" if direcao < 0 else "ASCENDING")
-            )
-        if tudo_no_banco and limite:
-            consulta_otimizada = consulta_otimizada.limit(limite)
-
-        def _ler(q) -> list[dict]:
-            saida = []
-            for snap in q.stream():
-                d = snap.to_dict() or {}
-                d.setdefault("_id", snap.id)
-                saida.append(d)
-            return saida
+        otimizada = plano.consulta
+        if plano.tudo_no_banco and ordena_no_banco:
+            otimizada = otimizada.order_by(campo_ordem, direction=sentido)
+        if plano.tudo_no_banco and limite and (not ordem or ordena_no_banco):
+            otimizada = otimizada.limit(limite)
 
         try:
-            return _ler(consulta_otimizada)
-        except FailedPrecondition:
-            # Ordenação exigiria índice composto que não existe: cai para o caminho
-            # simples (filtro no banco, ordenação/limite em memória).
-            return _ler(consulta)
+            return _ler(otimizada)
+        except FailedPrecondition as erro:
+            _avisar_indice(self.nome, erro)
+            if plano.so_range is not None:
+                q = plano.so_range
+                if campo_ordem == plano.campo_range:
+                    q = q.order_by(campo_ordem, direction=sentido)
+                    if limite:
+                        # teto de segurança: o refino em memória corta para `limite`
+                        q = q.limit(max(limite * 4, 200))
+                return _ler(q)
+            return _ler(plano.consulta)
+
+    def _sync_agregar(self, filtro: dict, soma: str | None) -> dict | None:
+        """count()/sum() nativos: custam ~1 leitura por 1000 documentos casados,
+        em vez de 1 leitura por documento. Devolve None se não der para agregar no banco."""
+        plano = self._montar_consulta(filtro)
+        if not plano.tudo_no_banco or filtro.get("_id") or filtro.get("id"):
+            return None
+        agg = plano.consulta.count(alias="qtd")
+        if soma:
+            agg = agg.sum(soma, alias="soma")
+        try:
+            resultado = agg.get()
+        except FailedPrecondition as erro:
+            _avisar_indice(self.nome, erro)
+            return None
+        valores = {r.alias: r.value for r in resultado[0]}
+        return {"qtd": int(valores.get("qtd") or 0), "soma": float(valores.get("soma") or 0)}
+
+    async def agregar(self, filtro: dict | None = None, soma: str | None = None) -> dict:
+        """{'qtd': n, 'soma': x} — agrega no Firestore; sem índice, calcula em memória
+        (ainda restrito ao intervalo de data do filtro)."""
+        filtro = filtro or {}
+        r = await anyio.to_thread.run_sync(self._sync_agregar, filtro, soma)
+        if r is not None:
+            return r
+        docs = await self._todos(filtro)
+        total = 0.0
+        if soma:
+            for d in docs:
+                v = _get(d, soma)
+                total += v if isinstance(v, (int, float)) else 0
+        return {"qtd": len(docs), "soma": total}
 
     async def _todos(
         self,
@@ -212,14 +303,14 @@ class _Colecao:
 
     # ---- API de coleção (find/insert/update/delete)
     async def find_one(self, filtro: dict | None = None) -> dict | None:
-        docs = await self._todos(filtro)
+        docs = await self._todos(filtro, limite=1)
         return docs[0] if docs else None
 
     def find(self, filtro: dict | None = None) -> _Cursor:
         return _Cursor(self, filtro)
 
     async def count_documents(self, filtro: dict | None = None) -> int:
-        return len(await self._todos(filtro))
+        return (await self.agregar(filtro))["qtd"]
 
     async def insert_one(self, doc: dict) -> _Resultado:
         dados = {k: v for k, v in doc.items() if k != "_id"}

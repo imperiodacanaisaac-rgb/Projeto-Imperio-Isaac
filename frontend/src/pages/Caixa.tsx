@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErroAviso, KpiCard, Loading, VazioAviso } from "@/components/Comuns";
 import { apiGet, apiPost, mensagemErro } from "@/lib/api";
-import { brl, dataHora, type CaixaMovimento, type CaixaResumo, type Relatorio } from "@/lib/types";
+import { brl, dataHora, type CaixaMovimento, type CaixaResumo, type DiaRelatorio } from "@/lib/types";
 
 const CATEGORIAS = ["despesa", "sangria", "suprimento"];
 const CATEGORIA_LABEL: Record<string, string> = {
@@ -51,8 +51,9 @@ export default function Caixa() {
   });
 
   const relatorio = useQuery({
-    queryKey: ["caixa", "relatorio", "7dias"],
-    queryFn: () => apiGet<Relatorio>("/caixa/relatorio"),
+    queryKey: ["caixa", "faturamento-dias", 7],
+    // Agregação no servidor (≈1 leitura/dia) em vez de baixar os pedidos da semana.
+    queryFn: () => apiGet<DiaRelatorio[]>("/caixa/faturamento-dias?dias=7"),
   });
 
   const lancar = useMutation({
@@ -73,7 +74,7 @@ export default function Caixa() {
     onError: (e) => toast.error(mensagemErro(e)),
   });
 
-  const dadosGrafico = (relatorio.data?.porDia ?? []).map((d) => ({
+  const dadosGrafico = (relatorio.data ?? []).map((d) => ({
     data: d.data.slice(8) + "/" + d.data.slice(5, 7),
     entradas: d.faturamento,
   }));

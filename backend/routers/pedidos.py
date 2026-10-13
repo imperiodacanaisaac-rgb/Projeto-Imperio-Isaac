@@ -5,9 +5,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from lib import cache
-from lib.auth import limpo, next_seq, registrar_log, usuario_atual
-from lib.dates import today_iso
+from lib.auth import _buscar_usuario_cacheado, limpo, next_seq, registrar_log, usuario_atual
+from lib.dates import inicio_do_dia, today_iso
 from lib.db import db
+from routers.caixa import validar_periodo
 from models.schemas import (
     CancelarIn,
     Comanda,
@@ -22,6 +23,8 @@ from models.schemas import (
 )
 
 router = APIRouter(prefix="/pedidos", tags=["pedidos"])
+
+LIMITE_LISTA = 50
 
 
 async def config_valor(chave: str, padrao: str) -> str:
@@ -115,6 +118,12 @@ async def _resolver_itens(itens: list[ItemIn]) -> list[dict]:
     return resolvidos
 
 
+def ids_produtos(itens: list[dict]) -> list[int]:
+    """Campo `produtoIds` (array): permite checar "produto já vendido" com
+    array_contains + count(), em vez de varrer todos os pedidos."""
+    return sorted({int(i["produtoId"]) for i in itens})
+
+
 def total_de(itens: list[dict]) -> float:
     return round(sum(i["quantidade"] * i["precoUnit"] for i in itens), 2)
 
@@ -126,11 +135,14 @@ async def montar(doc: dict) -> Pedido:
         )
         for i in doc.get("itens", [])
     ]
+    # Mesa e atendente vêm do cache: sem isso, listar 50 pedidos custava +100 leituras.
     mesa_numero = None
     if doc.get("mesaId"):
-        mesa = await db.mesas.find_one({"id": doc["mesaId"]})
+        mesa = await cache.lembrar(
+            f"mesas:ref:{doc['mesaId']}", 300.0, lambda: db.mesas.find_one({"id": doc["mesaId"]})
+        )
         mesa_numero = mesa["numero"] if mesa else None
-    atendente = await db.usuarios.find_one({"id": doc["atendenteId"]})
+    atendente = await _buscar_usuario_cacheado(doc["atendenteId"])
     pag = doc.get("pagamento")
     return Pedido(
         id=doc["id"],
@@ -189,17 +201,19 @@ async def listar(
         filtro["mesaId"] = mesaId
     if meus:
         filtro["atendenteId"] = user["id"]
-    if dataInicio or dataFim:
-        rng: dict = {}
-        if dataInicio:
-            rng["$gte"] = datetime.fromisoformat(dataInicio).replace(tzinfo=timezone.utc)
-        if dataFim:
-            rng["$lte"] = datetime.fromisoformat(dataFim).replace(
-                tzinfo=timezone.utc
-            ) + timedelta(days=1)
-        filtro["criadoEm"] = rng
-    # Limite explícito: traz só a página mais recente em vez de toda a coleção.
-    docs = await db.pedidos.find(filtro).sort("criadoEm", -1).to_list(50)
+
+    # Janela de data OBRIGATÓRIA: sem datas, só pedidos de HOJE (fuso APP_TZ).
+    # Única exceção: comandas ABERTAS de uma mesa (filtro já restrito por igualdade),
+    # para que uma comanda esquecida de ontem ainda possa ser paga/liberada.
+    so_abertos_da_mesa = mesaId is not None and status == "ABERTO" and not (dataInicio or dataFim)
+    if not so_abertos_da_mesa:
+        inicio = inicio_do_dia(dataInicio or dataFim)
+        fim = inicio_do_dia(dataFim or dataInicio) + timedelta(days=1)
+        validar_periodo(inicio, fim)
+        filtro["criadoEm"] = {"$gte": inicio, "$lt": fim}
+
+    # Limite rígido + mais recentes primeiro: o Firestore lê no máximo LIMITE_LISTA docs.
+    docs = await db.pedidos.find(filtro).sort("criadoEm", -1).to_list(LIMITE_LISTA)
     return [await montar(d) for d in docs]
 
 
@@ -223,6 +237,7 @@ async def criar(body: PedidoCreate, user: dict = Depends(usuario_atual)):
         "observacao": limpo(body.observacao),
         "canceladoMotivo": None,
         "itens": itens,
+        "produtoIds": ids_produtos(itens),
         "pagamento": None,
         "diaComanda": today_iso(),
         "criadoEm": datetime.now(timezone.utc),
@@ -254,6 +269,7 @@ async def editar(pid: int, body: PedidoUpdate, user: dict = Depends(usuario_atua
         {
             "$set": {
                 "itens": itens,
+                "produtoIds": ids_produtos(itens),
                 "clienteNome": limpo(body.clienteNome),
                 "observacao": limpo(body.observacao),
             }
@@ -288,7 +304,9 @@ async def adicionar_itens(pid: int, body: ItensAdd, user: dict = Depends(usuario
         else:
             atuais.append(novo)
 
-    await db.pedidos.update_one({"id": pid}, {"$set": {"itens": atuais}})
+    await db.pedidos.update_one(
+        {"id": pid}, {"$set": {"itens": atuais, "produtoIds": ids_produtos(atuais)}}
+    )
     await registrar_log(
         user["id"],
         "ADICIONOU_ITENS",
@@ -314,6 +332,7 @@ async def cancelar(pid: int, body: CancelarIn, user: dict = Depends(usuario_atua
     )
     if not atualizado:
         raise HTTPException(status_code=400, detail="Este pedido já foi finalizado")
+    cache.invalidar("dash:")
     await liberar_mesa(doc.get("mesaId"), ignorar_pedido=pid)
     await registrar_log(
         user["id"], "CANCELOU_PEDIDO", f"Comanda {doc['numeroComanda']} — {motivo}"
@@ -351,6 +370,7 @@ async def pagar(pid: int, body: PagamentoIn, user: dict = Depends(usuario_atual)
     )
     if not atualizado:
         raise HTTPException(status_code=400, detail="Este pedido já foi pago por outro usuário")
+    cache.invalidar("dash:")
 
     await db.caixa.insert_one(
         {

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from lib import cache
 from lib.auth import limpo, next_seq, permitir, registrar_log, usuario_atual
+from lib.dates import dia_local, inicio_do_dia
 from lib.db import db
 from models.schemas import (
     CaixaMovimento,
@@ -36,19 +37,72 @@ def grupo_da_categoria(categoria: str) -> str:
 
 
 async def mapa_produtos() -> dict[int, dict]:
-    produtos = await db.produtos.find().to_list(1000)
-    return {p["id"]: p for p in produtos}
+    async def calcular() -> dict[int, dict]:
+        produtos = await db.produtos.find().to_list(1000)
+        return {p["id"]: p for p in produtos}
+
+    # Cardápio muda pouco: evita reler todos os produtos a cada relatório.
+    return await cache.lembrar("produtos:mapa", 120.0, calcular)
 
 
 def dia_utc(data: Optional[str]) -> datetime:
-    if data:
-        return datetime.fromisoformat(data).replace(tzinfo=timezone.utc)
-    agora = datetime.now(timezone.utc)
-    return datetime(agora.year, agora.month, agora.day, tzinfo=timezone.utc)
+    """Início do dia no fuso do estabelecimento (APP_TZ), timezone-aware."""
+    return inicio_do_dia(data)
 
 
 def aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+MAX_DIAS_PERIODO = 31
+
+
+def validar_periodo(inicio: datetime, fim: datetime) -> None:
+    """Teto de período: impede que um relatório varra meses de pedidos de uma vez."""
+    if fim <= inicio:
+        raise HTTPException(status_code=400, detail="A data final deve ser igual ou posterior à inicial")
+    if (fim - inicio).days > MAX_DIAS_PERIODO:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Período máximo de {MAX_DIAS_PERIODO} dias por consulta",
+        )
+
+
+async def _agregar_dia(ini: datetime) -> DiaRelatorio:
+    agg = await db.pedidos.agregar(
+        {"status": "PAGO", "criadoEm": {"$gte": ini, "$lt": ini + timedelta(days=1)}},
+        soma="pagamento.valor",
+    )
+    return DiaRelatorio(
+        data=ini.date().isoformat(), faturamento=round(agg["soma"], 2), pedidos=agg["qtd"]
+    )
+
+
+async def faturamento_por_dia(ultimo_dia: datetime, dias: int) -> list[DiaRelatorio]:
+    """Faturamento/pedidos pagos por dia via agregação nativa (count + sum) — cada
+    dia custa ~1 leitura no Firestore em vez de ler todos os pedidos do período.
+    Dias passados não mudam: ficam 12h em cache; só o dia atual é recalculado."""
+    hoje = dia_utc(None)
+    saida: list[DiaRelatorio] = []
+    for n in range(dias - 1, -1, -1):
+        ini = ultimo_dia - timedelta(days=n)
+        if ini < hoje:
+            saida.append(
+                await cache.lembrar(
+                    f"hist:dia:{ini.date().isoformat()}", 43200.0, lambda i=ini: _agregar_dia(i)
+                )
+            )
+        else:
+            saida.append(await _agregar_dia(ini))
+    return saida
+
+
+@router.get("/faturamento-dias", response_model=list[DiaRelatorio])
+async def faturamento_dias(dias: int = 7, _user: dict = Depends(permitir("ADMIN", "DEV"))):
+    dias = max(1, min(dias, 14))
+    return await cache.lembrar(
+        f"dash:faturamento-dias:{dias}", 60.0, lambda: faturamento_por_dia(dia_utc(None), dias)
+    )
 
 
 @router.get("/resumo", response_model=CaixaResumo)
@@ -124,6 +178,7 @@ async def relatorio(
     fim_base = dia_utc(dataFim)
     inicio = dia_utc(dataInicio) if dataInicio else fim_base - timedelta(days=6)
     fim = fim_base + timedelta(days=1)
+    validar_periodo(inicio, fim)
 
     pedidos = await db.pedidos.find(
         {"status": "PAGO", "criadoEm": {"$gte": inicio, "$lt": fim}}
@@ -139,7 +194,7 @@ async def relatorio(
     for p in pedidos:
         total = round(sum(i["quantidade"] * i["precoUnit"] for i in p.get("itens", [])), 2)
         total_faturado += total
-        chave = aware(p["criadoEm"]).date().isoformat()
+        chave = dia_local(p["criadoEm"])
         por_dia[chave]["faturamento"] += total
         por_dia[chave]["pedidos"] += 1
         for i in p.get("itens", []):
@@ -219,6 +274,7 @@ async def vendas_categorias(
     fim_base = dia_utc(dataFim)
     inicio = dia_utc(dataInicio) if dataInicio else fim_base
     fim = fim_base + timedelta(days=1)
+    validar_periodo(inicio, fim)
 
     pedidos = await db.pedidos.find(
         {"status": "PAGO", "criadoEm": {"$gte": inicio, "$lt": fim}}
