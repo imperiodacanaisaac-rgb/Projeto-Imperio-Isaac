@@ -430,3 +430,10 @@ ou status de pedido.
 - **Índices compostos**: `/app/firestore.indexes.json` (referenciado em `firebase.json`). Publicar com
   `firebase deploy --only firestore:indexes`. A service account do backend NÃO tem permissão para
   criá-los (`scripts/criar_indices.py` retorna 403).
+
+## "Carregar mais" na lista de Pedidos (paginação por cursor)
+- `GET /api/pedidos?...&antesDe=<ISO criadoEm>` devolve os próximos 50 pedidos MAIS ANTIGOS que o
+  cursor, sempre dentro da mesma janela de datas (hoje por padrão; máx. 31 dias). `antesDe` inválido → 400.
+- Frontend (`Pedidos.tsx`) usa `useInfiniteQuery`: 1ª página ao abrir; as seguintes só ao clicar em
+  "Carregar mais 50" (`botao-carregar-mais-pedidos`). Página com < 50 itens = fim (`pedidos-fim-lista`).
+  Cada clique custa ~50 leituras no Firestore, nunca a coleção inteira.

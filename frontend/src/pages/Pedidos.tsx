@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Minus, Plus } from "lucide-react";
+import { Loader2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import { apiGet, apiPatch, apiPost, mensagemErro } from "@/lib/api";
 import { brl, dataHora, FORMA_LABEL, type FormaPagamento, type Pedido, type Produto } from "@/lib/types";
 import { useDebounce } from "@/hooks/useDebounce";
 
+const TAMANHO_PAGINA = 50;
 const FORMAS: FormaPagamento[] = ["DINHEIRO", "PIX", "CREDITO", "DEBITO"];
 const STATUS_FILTRO = ["TODOS", "ABERTO", "PAGO", "CANCELADO"];
 const STATUS_LABEL: Record<string, string> = {
@@ -56,10 +57,20 @@ export default function Pedidos() {
   if (inicioDebounce) query.set("dataInicio", inicioDebounce);
   if (fimDebounce) query.set("dataFim", fimDebounce);
 
-  const pedidos = useQuery({
+  // Páginas de 50 (limite do backend). A próxima só é buscada ao clicar em "Carregar mais",
+  // usando como cursor o criadoEm do último pedido exibido.
+  const pedidos = useInfiniteQuery({
     queryKey: ["pedidos", query.toString()],
-    queryFn: () => apiGet<Pedido[]>(`/pedidos?${query.toString()}`),
+    initialPageParam: "",
+    queryFn: ({ pageParam }) => {
+      const q = new URLSearchParams(query);
+      if (pageParam) q.set("antesDe", pageParam);
+      return apiGet<Pedido[]>(`/pedidos?${q.toString()}`);
+    },
+    getNextPageParam: (ultima) =>
+      ultima.length < TAMANHO_PAGINA ? undefined : ultima[ultima.length - 1].criadoEm,
   });
+  const lista = pedidos.data?.pages.flat();
 
   const invalidar = () => {
     qc.invalidateQueries({ queryKey: ["pedidos"] });
@@ -190,16 +201,16 @@ export default function Pedidos() {
 
       <p className="text-xs text-muted-foreground" data-testid="pedidos-janela-info">
         {dataInicio || dataFim
-          ? "Exibindo os 50 pedidos mais recentes do período escolhido (máx. 31 dias)."
-          : "Exibindo apenas os pedidos de hoje (50 mais recentes). Use as datas para ver outros dias."}
+          ? "Pedidos do período escolhido (máx. 31 dias), 50 por vez — use \"Carregar mais\" para os anteriores."
+          : "Exibindo apenas os pedidos de hoje, 50 por vez. Use as datas para ver outros dias."}
       </p>
 
       {pedidos.isError && <ErroAviso texto="Não foi possível carregar os pedidos." />}
       {pedidos.isLoading && <Loading />}
 
-      {pedidos.data && !pedidos.isError && (
+      {lista && !pedidos.isError && (
         <>
-          {pedidos.data.length === 0 ? (
+          {lista.length === 0 ? (
             <div className="rounded-xl border border-border bg-card">
               <VazioAviso
                 texto="Nenhum pedido encontrado com estes filtros."
@@ -210,7 +221,7 @@ export default function Pedidos() {
             <>
               {/* Mobile: cards empilhados, sem scroll horizontal */}
               <div className="space-y-3 md:hidden" data-testid="cards-pedidos-mobile">
-                {pedidos.data.map((p) => (
+                {lista.map((p) => (
                   <div
                     key={p.id}
                     className="rounded-xl border border-border bg-card p-4"
@@ -271,7 +282,7 @@ export default function Pedidos() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pedidos.data.map((p) => (
+                    {lista.map((p) => (
                       <TableRow key={p.id} data-testid={`linha-pedido-${p.numeroComanda}`}>
                         <TableCell className="font-mono font-bold">{p.numeroComanda}</TableCell>
                         <TableCell>{p.clienteNome || "—"}</TableCell>
@@ -296,6 +307,33 @@ export default function Pedidos() {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+
+              <div className="flex flex-col items-center gap-2 pt-1">
+                <p className="text-xs text-muted-foreground" data-testid="pedidos-contagem">
+                  {lista.length} pedido(s) exibido(s)
+                </p>
+                {pedidos.hasNextPage ? (
+                  <Button
+                    variant="outline"
+                    className="h-11 min-w-48 transition-transform active:scale-95"
+                    onClick={() => pedidos.fetchNextPage()}
+                    disabled={pedidos.isFetchingNextPage}
+                    data-testid="botao-carregar-mais-pedidos"
+                  >
+                    {pedidos.isFetchingNextPage ? (
+                      <>
+                        <Loader2 className="mr-1.5 size-4 animate-spin" /> Carregando…
+                      </>
+                    ) : (
+                      `Carregar mais ${TAMANHO_PAGINA}`
+                    )}
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground" data-testid="pedidos-fim-lista">
+                    Todos os pedidos deste período já estão na lista.
+                  </p>
+                )}
               </div>
             </>
           )}

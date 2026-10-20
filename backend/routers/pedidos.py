@@ -189,6 +189,7 @@ async def listar(
     numeroComanda: Optional[str] = None,
     mesaId: Optional[int] = None,
     meus: bool = Query(default=False),
+    antesDe: Optional[str] = None,
     user: dict = Depends(usuario_atual),
 ):
     filtro: dict = {}
@@ -206,11 +207,24 @@ async def listar(
     # Única exceção: comandas ABERTAS de uma mesa (filtro já restrito por igualdade),
     # para que uma comanda esquecida de ontem ainda possa ser paga/liberada.
     so_abertos_da_mesa = mesaId is not None and status == "ABERTO" and not (dataInicio or dataFim)
+    janela: dict = {}
     if not so_abertos_da_mesa:
         inicio = inicio_do_dia(dataInicio or dataFim)
         fim = inicio_do_dia(dataFim or dataInicio) + timedelta(days=1)
         validar_periodo(inicio, fim)
-        filtro["criadoEm"] = {"$gte": inicio, "$lt": fim}
+        janela = {"$gte": inicio, "$lt": fim}
+    # "Carregar mais": cursor = criadoEm do último pedido já exibido. A próxima página
+    # lê só os 50 seguintes (mais antigos), dentro da mesma janela de datas.
+    if antesDe:
+        try:
+            cursor = datetime.fromisoformat(antesDe.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Parâmetro antesDe inválido")
+        if cursor.tzinfo is None:
+            cursor = cursor.replace(tzinfo=timezone.utc)
+        janela["$lt"] = min(janela.get("$lt", cursor), cursor)
+    if janela:
+        filtro["criadoEm"] = janela
 
     # Limite rígido + mais recentes primeiro: o Firestore lê no máximo LIMITE_LISTA docs.
     docs = await db.pedidos.find(filtro).sort("criadoEm", -1).to_list(LIMITE_LISTA)
